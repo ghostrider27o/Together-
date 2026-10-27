@@ -1,0 +1,14 @@
+{
+  "name": "together",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-01-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "COUPLE", "class_name": "Couple" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Couple"] }]
+}
