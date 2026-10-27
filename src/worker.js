@@ -69,6 +69,40 @@ export class Couple extends DurableObject {
       await save();
       return { status: 200, data: { ok: true } };
     }
+
+    if (action === "send") {
+      const kind = ["text", "image", "voice"].includes(b.kind) ? b.kind : "text";
+      const text = String(b.text || "").trim().slice(0, 1000);
+      let media = null;
+      if (kind === "text") {
+        if (!text) return { status: 400, data: { error: "Write something" } };
+      } else {
+        media = String(b.media || "");
+        if (!media.startsWith("data:") || media.length > 1800000) {
+          return { status: 400, data: { error: "File is too big" } };
+        }
+      }
+      s.chat = s.chat || [];
+      s.nextId = (s.nextId || 0) + 1;
+      const id = s.nextId;
+      s.chat.push({ id, kind, text, by: me.name, ts: Date.now(), dur: Number(b.dur) || 0 });
+      if (media) await this.ctx.storage.put("m:" + id, media);
+      while (s.chat.length > 300) {
+        const old = s.chat.shift();
+        if (old.kind !== "text") await this.ctx.storage.delete("m:" + old.id);
+      }
+      await save();
+      return { status: 200, data: { ok: true, id } };
+    }
+    if (action === "chat") {
+      const since = Number(b.since) || 0;
+      return { status: 200, data: { me: me.name, msgs: (s.chat || []).filter((m) => m.id > since) } };
+    }
+    if (action === "media") {
+      const m = await this.ctx.storage.get("m:" + Number(b.id));
+      return m ? { status: 200, data: { media: m } } : { status: 404, data: { error: "Gone" } };
+    }
+
     return { status: 400, data: { error: "Unknown action" } };
   }
 }
