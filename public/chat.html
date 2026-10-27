@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chat · Together</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#1b1530;--bg2:#271f45;--ink:#f3eefc;--mute:#b4a9d6;--rose:#f6a6b8;--gold:#ffd79a;--line:#3a3163}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;display:flex;flex-direction:column}
+header{padding:12px 18px;border-bottom:1px solid var(--line);font-size:32px;color:var(--rose);font-family:'Caveat',cursive;text-align:center;line-height:1.1}
+#msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px}
+.b{max-width:80%;padding:9px 12px;border-radius:16px;overflow-wrap:anywhere;white-space:pre-wrap}
+.me{align-self:flex-end;background:var(--rose);color:#2a1326;border-bottom-right-radius:4px}
+.th{align-self:flex-start;background:var(--bg2);border:1px solid var(--line);border-bottom-left-radius:4px}
+.b time{display:block;font-size:11px;opacity:.65;margin-top:3px}
+.b img{max-width:100%;min-width:120px;min-height:80px;border-radius:10px;display:block;cursor:pointer;background:#0003}
+.b audio{max-width:100%;height:40px;display:block}
+.empty{color:var(--mute);text-align:center;margin:auto}
+#bar,#rbar{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line);align-items:flex-end}
+#rbar{display:none;align-items:center}
+#rtime{flex:1;color:var(--gold);font-weight:700}
+#txt{flex:1;max-height:110px;resize:none;background:var(--bg2);border:1px solid var(--line);color:var(--ink);padding:11px 13px;border-radius:14px;font:inherit}
+#txt:focus,button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+button{font:inherit;cursor:pointer;border:0;border-radius:12px;background:var(--rose);color:#2a1326;font-weight:700;height:44px;padding:0 16px}
+button.ic{width:44px;padding:0;font-size:20px;background:var(--bg2);border:1px solid var(--line);color:var(--ink)}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#ff5d73;margin-right:8px;animation:p 1s infinite}
+@keyframes p{50%{opacity:.3}}
+nav{display:flex;justify-content:space-around;background:#150f27;border-top:1px solid var(--line);padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px))}
+nav a{color:var(--mute);text-decoration:none;font-size:14px}
+nav a.on{color:var(--gold);font-weight:700}
+#lb{display:none;position:fixed;inset:0;background:#000d;align-items:center;justify-content:center;z-index:9}
+#lb img{max-width:96%;max-height:92%;border-radius:8px}
+@media(prefers-reduced-motion:reduce){.dot{animation:none}}
+</style>
+</head>
+<body>
+<header>Our chat ❤️</header>
+<div id="msgs"><p class="empty">No messages yet. Say hi!</p></div>
+
+<div id="bar">
+  <button class="ic" id="picBtn" aria-label="Send photo">📷</button>
+  <input type="file" id="pic" accept="image/*" hidden>
+  <textarea id="txt" rows="1" placeholder="Message" maxlength="1000"></textarea>
+  <button class="ic" id="mic" aria-label="Record voice message">🎤</button>
+  <button id="send">Send</button>
+</div>
+<div id="rbar">
+  <button class="ghost" id="rcancel">Cancel</button>
+  <div id="rtime"><span class="dot"></span><span id="rt">0:00</span></div>
+  <button id="rsend">Send voice</button>
+</div>
+
+<nav>
+  <a href="/">Home</a><a href="/chat.html" class="on">Chat</a><a href="/#play">Play</a><a href="/#memories">Memories</a><a href="/#note">Notes</a>
+</nav>
+<div id="lb"><img alt=""></div>
+
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id)};
+  var S=null;try{S=JSON.parse(localStorage.getItem('together:session'))}catch(e){}
+  if(!S||!S.token){location.href='/';return}
+  function api(a,b){
+    b=b||{};b.token=S.token;
+    return fetch('/api/'+S.code+'/'+a,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})
+      .then(function(r){return r.json().then(function(j){return {ok:r.ok,status:r.status,j:j}})});
+  }
+  var box=$('msgs'),last=0,me=S.name,first=true;
+
+  function pinned(){return box.scrollHeight-box.scrollTop-box.clientHeight<120}
+  function toEnd(){box.scrollTop=box.scrollHeight}
+  function fmtTime(ts){
+    var d=new Date(ts),t=d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+    return d.toDateString()===new Date().toDateString()?t:d.toLocaleDateString([], {day:'numeric',month:'short'})+', '+t;
+  }
+  function add(m){
+    var e=box.querySelector('.empty');if(e)e.remove();
+    var d=document.createElement('div');d.className='b '+(m.by===me?'me':'th');
+    if(m.kind==='image'){
+      var im=document.createElement('img');im.alt='Photo';
+      im.onload=function(){if(pin)toEnd()};
+      im.onclick=function(){if(im.src){$('lb').firstChild.src=im.src;$('lb').style.display='flex'}};
+      d.appendChild(im);
+      api('media',{id:m.id}).then(function(r){if(r.ok)im.src=r.j.media});
+    }else if(m.kind==='voice'){
+      var a=document.createElement('audio');a.controls=true;a.preload='metadata';d.appendChild(a);
+      api('media',{id:m.id}).then(function(r){if(r.ok)a.src=r.j.media});
+    }else{
+      d.appendChild(document.createTextNode(m.text));
+    }
+    var t=document.createElement('time');
+    t.textContent=(m.by===me?'':m.by+' · ')+fmtTime(m.ts)+(m.kind==='voice'&&m.dur?' · '+m.dur+'s':'');
+    d.appendChild(t);box.appendChild(d);
+  }
+  var pin=true;
+  function poll(){
+    if(document.hidden&&!first)return;
+    api('chat',{since:last}).then(function(r){
+      if(r.status===401||r.status===404){try{localStorage.removeItem('together:session')}catch(e){};location.href='/';return}
+      if(!r.ok)return;
+      me=r.j.me;
+      if(r.j.msgs.length){
+        pin=first||pinned();
+        r.j.msgs.forEach(function(m){add(m);if(m.id>last)last=m.id});
+        if(pin)toEnd();
+      }
+      first=false;
+    }).catch(function(){});
+  }
+  poll();setInterval(poll,2000);
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)poll()});
+
+  /* ---- text ---- */
+  var txt=$('txt');
+  txt.oninput=function(){txt.style.height='auto';txt.style.height=Math.min(txt.scrollHeight,110)+'px'};
+  function sent(r){if(r.ok){pin=true;poll()}else alert(r.j.error||'Could not send')}
+  $('send').onclick=function(){
+    var t=txt.value.trim();if(!t)return;
+    txt.value='';txt.style.height='auto';
+    api('send',{kind:'text',text:t}).then(sent).catch(function(){alert('No connection')});
+  };
+
+  /* ---- photo ---- */
+  function compress(f){
+    return new Promise(function(res,rej){
+      var img=new Image(),u=URL.createObjectURL(f);
+      img.onload=function(){
+        var k=Math.min(1,1000/Math.max(img.width,img.height)),c=document.createElement('canvas');
+        c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);
+        var q=.7,d=c.toDataURL('image/jpeg',q);
+        while(d.length>1500000&&q>.3){q-=.1;d=c.toDataURL('image/jpeg',q)}
+        res(d);
+      };
+      img.onerror=function(){rej()};img.src=u;
+    });
+  }
+  $('picBtn').onclick=function(){$('pic').click()};
+  $('pic').onchange=function(){
+    var f=this.files[0];this.value='';if(!f)return;
+    compress(f).then(function(d){return api('send',{kind:'image',media:d})}).then(sent)
+      .catch(function(){alert('Could not send this photo')});
+  };
+  $('lb').onclick=function(){this.style.display='none'};
+
+  /* ---- voice ---- */
+  var rec,chunks,t0,rTimer,cancelled;
+  function ui(on){$('bar').style.display=on?'none':'flex';$('rbar').style.display=on?'flex':'none'}
+  $('mic').onclick=function(){
+    if(!navigator.mediaDevices||!window.MediaRecorder){alert('Voice recording is not supported in this browser.');return}
+    navigator.mediaDevices.getUserMedia({audio:true}).then(function(st){
+      var mt='';
+      ['audio/webm;codecs=opus','audio/webm','audio/mp4'].some(function(t){if(MediaRecorder.isTypeSupported(t)){mt=t;return true}});
+      rec=new MediaRecorder(st,mt?{mimeType:mt}:{});chunks=[];cancelled=false;
+      rec.ondataavailable=function(e){if(e.data.size)chunks.push(e.data)};
+      rec.onstop=function(){
+        st.getTracks().forEach(function(t){t.stop()});clearInterval(rTimer);ui(false);
+        var dur=Math.round((Date.now()-t0)/1000);
+        if(cancelled||dur<1)return;
+        var fr=new FileReader();
+        fr.onload=function(){api('send',{kind:'voice',media:fr.result,dur:dur}).then(sent).catch(function(){alert('No connection')})};
+        fr.readAsDataURL(new Blob(chunks,{type:rec.mimeType||'audio/webm'}));
+      };
+      rec.start();t0=Date.now();ui(true);$('rt').textContent='0:00';
+      rTimer=setInterval(function(){
+        var s=Math.floor((Date.now()-t0)/1000);
+        $('rt').textContent=Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60;
+        if(s>=60&&rec.state==='recording')rec.stop();
+      },250);
+    }).catch(function(){alert('Allow microphone permission to record.')});
+  };
+  $('rsend').onclick=function(){if(rec&&rec.state==='recording')rec.stop()};
+  $('rcancel').onclick=function(){cancelled=true;if(rec&&rec.state==='recording')rec.stop()};
+})();
+</script>
+</body>
+</html>
