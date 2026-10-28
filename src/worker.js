@@ -108,10 +108,37 @@ export class Couple extends DurableObject {
           start: s.start,
           mems: s.mems,
           names: s.members.map((m) => m.name),
+          me: me.name,
           hasPin: !!s.pinHash,
+          pics: s.picv || {},
         },
       };
     }
+
+    if (action === "setPic") {
+      const img = String(b.img || "");
+      s.picv = s.picv || {};
+      const k = "pic:" + me.name.toLowerCase();
+      if (!img) {
+        await this.ctx.storage.delete(k);
+        delete s.picv[me.name];
+        await save();
+        return { status: 200, data: { ok: true } };
+      }
+      if (!/^data:image\/(jpeg|png|webp);base64,/.test(img) || img.length > 400000) {
+        return { status: 400, data: { error: "Photo is too big" } };
+      }
+      await this.ctx.storage.put(k, img);
+      s.picv[me.name] = Date.now();
+      await save();
+      return { status: 200, data: { ok: true } };
+    }
+    if (action === "getPic") {
+      const who = s.members.find((m) => m.name === b.name);
+      const img = who ? await this.ctx.storage.get("pic:" + who.name.toLowerCase()) : null;
+      return img ? { status: 200, data: { img } } : { status: 404, data: { error: "No photo" } };
+    }
+
     if (action === "setStart") {
       const t = Number(b.start);
       if (!Number.isFinite(t)) return { status: 400, data: { error: "Bad date" } };
