@@ -15,10 +15,14 @@ header{padding:12px 18px;border-bottom:1px solid var(--line);font-size:32px;colo
 .b{max-width:80%;padding:9px 12px;border-radius:16px;overflow-wrap:anywhere;white-space:pre-wrap}
 .me{align-self:flex-end;background:var(--rose);color:#2a1326;border-bottom-right-radius:4px}
 .th{align-self:flex-start;background:var(--bg2);border:1px solid var(--line);border-bottom-left-radius:4px}
-.b time{display:block;font-size:11px;opacity:.65;margin-top:3px}
+.b time{display:block;font-size:11px;opacity:.7;margin-top:3px}
+.me time{text-align:right}
+.tk{margin-left:5px;font-weight:700;letter-spacing:-2px}
+.tk.seen{color:#1f4fd8;opacity:1}
 .b img{max-width:100%;min-width:120px;min-height:80px;border-radius:10px;display:block;cursor:pointer;background:#0003}
 .b audio{max-width:100%;height:40px;display:block}
 .empty{color:var(--mute);text-align:center;margin:auto}
+#typ{display:none;padding:2px 16px 6px;color:var(--gold);font-size:13px}
 #bar,#rbar{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line);align-items:flex-end}
 #rbar{display:none;align-items:center}
 #rtime{flex:1;color:var(--gold);font-weight:700}
@@ -40,6 +44,7 @@ nav a.on{color:var(--gold);font-weight:700}
 <body>
 <header>Our chat ❤️</header>
 <div id="msgs"><p class="empty">No messages yet. Say hi!</p></div>
+<div id="typ"></div>
 
 <div id="bar">
   <button class="ic" id="picBtn" aria-label="Send photo">📷</button>
@@ -69,7 +74,10 @@ nav a.on{color:var(--gold);font-weight:700}
     return fetch('/api/'+S.code+'/'+a,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})
       .then(function(r){return r.json().then(function(j){return {ok:r.ok,status:r.status,j:j}})});
   }
-  var box=$('msgs'),last=0,me=S.name,first=true;
+  var box=$('msgs'),last=0,me=S.name,first=true,pin=true;
+  var seenId=0;        // highest message id from the other person that I have seen
+  var lastTyped=0;     // when I last typed
+  var ticks={};        // my message id -> tick element
 
   function pinned(){return box.scrollHeight-box.scrollTop-box.clientHeight<120}
   function toEnd(){box.scrollTop=box.scrollHeight}
@@ -79,7 +87,8 @@ nav a.on{color:var(--gold);font-weight:700}
   }
   function add(m){
     var e=box.querySelector('.empty');if(e)e.remove();
-    var d=document.createElement('div');d.className='b '+(m.by===me?'me':'th');
+    var mine=m.by===me;
+    var d=document.createElement('div');d.className='b '+(mine?'me':'th');
     if(m.kind==='image'){
       var im=document.createElement('img');im.alt='Photo';
       im.onload=function(){if(pin)toEnd()};
@@ -93,21 +102,43 @@ nav a.on{color:var(--gold);font-weight:700}
       d.appendChild(document.createTextNode(m.text));
     }
     var t=document.createElement('time');
-    t.textContent=(m.by===me?'':m.by+' · ')+fmtTime(m.ts)+(m.kind==='voice'&&m.dur?' · '+m.dur+'s':'');
+    t.textContent=(mine?'':m.by+' · ')+fmtTime(m.ts)+(m.kind==='voice'&&m.dur?' · '+m.dur+'s':'');
+    if(mine){
+      var k=document.createElement('span');k.className='tk';k.textContent='✓';
+      t.appendChild(k);ticks[m.id]=k;
+    }
     d.appendChild(t);box.appendChild(d);
   }
-  var pin=true;
+  function updateTicks(otherSeen){
+    for(var id in ticks){
+      if(+id<=otherSeen&&ticks[id].textContent!=='✓✓'){
+        ticks[id].textContent='✓✓';ticks[id].className='tk seen';
+      }
+    }
+  }
+
   function poll(){
     if(document.hidden&&!first)return;
-    api('chat',{since:last}).then(function(r){
+    var typing=Date.now()-lastTyped<3000;
+    api('chat',{since:last,seen:seenId,typing:typing}).then(function(r){
       if(r.status===401||r.status===404){try{localStorage.removeItem('together:session')}catch(e){};location.href='/';return}
       if(!r.ok)return;
       me=r.j.me;
       if(r.j.msgs.length){
         pin=first||pinned();
-        r.j.msgs.forEach(function(m){add(m);if(m.id>last)last=m.id});
+        r.j.msgs.forEach(function(m){
+          add(m);
+          if(m.id>last)last=m.id;
+          if(m.by!==me&&m.id>seenId&&!document.hidden)seenId=m.id;
+        });
         if(pin)toEnd();
       }
+      updateTicks(r.j.otherSeen||0);
+      var ty=$('typ');
+      if(r.j.typing){
+        ty.textContent=(r.j.otherName||'Your partner')+' is typing...';ty.style.display='block';
+        if(pinned())toEnd();
+      }else ty.style.display='none';
       first=false;
     }).catch(function(){});
   }
@@ -116,8 +147,11 @@ nav a.on{color:var(--gold);font-weight:700}
 
   /* ---- text ---- */
   var txt=$('txt');
-  txt.oninput=function(){txt.style.height='auto';txt.style.height=Math.min(txt.scrollHeight,110)+'px'};
-  function sent(r){if(r.ok){pin=true;poll()}else alert(r.j.error||'Could not send')}
+  txt.oninput=function(){
+    txt.style.height='auto';txt.style.height=Math.min(txt.scrollHeight,110)+'px';
+    if(txt.value.trim())lastTyped=Date.now();
+  };
+  function sent(r){if(r.ok){pin=true;lastTyped=0;poll()}else alert(r.j.error||'Could not send')}
   $('send').onclick=function(){
     var t=txt.value.trim();if(!t)return;
     txt.value='';txt.style.height='auto';
