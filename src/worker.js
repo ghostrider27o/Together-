@@ -17,8 +17,26 @@ const clean = (t) =>
     .replace(/&gt;/g, ">")
     .slice(0, 120);
 const VID = /^[A-Za-z0-9_-]{11}$/;
+const PIN = /^\d{4}$/;
+const LOCK_MS = 15 * 60 * 1000;
+const hex = (buf) => Array.from(new Uint8Array(buf), (x) => x.toString(16).padStart(2, "0")).join("");
+const hashPin = async (pin, salt) =>
+  hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(salt + ":" + pin)));
 
 export class Couple extends DurableObject {
+  // Simple rate limiter (used with special "rl:<ip>" instances)
+  async rlCheck(kind, max, win) {
+    const d = (await this.ctx.storage.get(kind)) || { n: 0, t: 0 };
+    if (Date.now() - d.t > win) return { blocked: false };
+    return { blocked: d.n >= max, retry: Math.max(1, Math.ceil((d.t + win - Date.now()) / 60000)) };
+  }
+  async rlHit(kind, win) {
+    let d = (await this.ctx.storage.get(kind)) || { n: 0, t: 0 };
+    if (Date.now() - d.t > win) d = { n: 0, t: Date.now() };
+    d.n++;
+    await this.ctx.storage.put(kind, d);
+  }
+
   async act(action, b) {
     let s = (await this.ctx.storage.get("s")) || { created: false, members: [], start: null, mems: [] };
     const save = () => this.ctx.storage.put("s", s);
@@ -28,8 +46,12 @@ export class Couple extends DurableObject {
     if (action === "create") {
       if (s.created) return { status: 409, data: { error: "exists" } };
       if (!name) return { status: 400, data: { error: "Enter your name" } };
+      const pin = String(b.pin || "");
+      if (!PIN.test(pin)) return { status: 400, data: { error: "Choose a 4-digit PIN" } };
       const token = crypto.randomUUID();
       s.created = true;
+      s.salt = crypto.randomUUID();
+      s.pinHash = await hashPin(pin, s.salt);
       s.members.push({ name, token });
       await save();
       return { status: 200, data: { token, name } };
@@ -39,6 +61,24 @@ export class Couple extends DurableObject {
 
     if (action === "join") {
       if (!name) return { status: 400, data: { error: "Enter your name" } };
+      if (s.fails && s.fails.n >= 5 && Date.now() - s.fails.t < LOCK_MS) {
+        const m = Math.ceil((s.fails.t + LOCK_MS - Date.now()) / 60000);
+        return { status: 429, data: { error: "Too many wrong tries. Try again in " + m + " min." } };
+      }
+      if (s.pinHash) {
+        const pin = String(b.pin || "");
+        const ok = PIN.test(pin) && (await hashPin(pin, s.salt)) === s.pinHash;
+        if (!ok) {
+          s.fails =
+            s.fails && Date.now() - s.fails.t < LOCK_MS ? { n: s.fails.n + 1, t: s.fails.t } : { n: 1, t: Date.now() };
+          await save();
+          return { status: 403, data: { error: "Wrong PIN" } };
+        }
+      }
+      if (s.fails) {
+        s.fails = null;
+        await save();
+      }
       const same = s.members.find((m) => m.name.toLowerCase() === name.toLowerCase());
       if (same) return { status: 200, data: { token: same.token, name: same.name } };
       if (s.members.length >= 2) return { status: 403, data: { error: "This couple already has two people" } };
@@ -50,10 +90,26 @@ export class Couple extends DurableObject {
 
     if (!me) return { status: 401, data: { error: "Not signed in" } };
 
+    if (action === "setPin") {
+      if (s.pinHash) return { status: 400, data: { error: "PIN is already set" } };
+      const pin = String(b.pin || "");
+      if (!PIN.test(pin)) return { status: 400, data: { error: "Choose a 4-digit PIN" } };
+      s.salt = crypto.randomUUID();
+      s.pinHash = await hashPin(pin, s.salt);
+      await save();
+      return { status: 200, data: { ok: true } };
+    }
+
     if (action === "get") {
       return {
         status: 200,
-        data: { now: Date.now(), start: s.start, mems: s.mems, names: s.members.map((m) => m.name) },
+        data: {
+          now: Date.now(),
+          start: s.start,
+          mems: s.mems,
+          names: s.members.map((m) => m.name),
+          hasPin: !!s.pinHash,
+        },
       };
     }
     if (action === "setStart") {
@@ -209,11 +265,19 @@ export default {
     if (p[0] !== "api") return env.ASSETS.fetch(req);
     if (req.method !== "POST") return json({ error: "POST only" }, 405);
     const body = await req.json().catch(() => ({}));
+    const ip = req.headers.get("CF-Connecting-IP") || "unknown";
+    const limiter = () => env.COUPLE.get(env.COUPLE.idFromName("rl:" + ip));
 
     if (p[1] === "create") {
+      const lim = limiter();
+      const c = await lim.rlCheck("create", 5, 3600000);
+      if (c.blocked) {
+        return json({ error: "Too many new spaces from this network. Try again in " + c.retry + " min." }, 429);
+      }
       for (let i = 0; i < 5; i++) {
         const code = genCode();
         const r = await env.COUPLE.get(env.COUPLE.idFromName(code)).act("create", body);
+        if (r.status === 200) await lim.rlHit("create", 3600000);
         if (r.status !== 409) return json({ ...r.data, code }, r.status);
       }
       return json({ error: "Try again" }, 500);
@@ -221,7 +285,16 @@ export default {
 
     const code = (p[1] || "").toUpperCase();
     if (!/^[A-Z2-9]{6}$/.test(code)) return json({ error: "Code must be 6 characters" }, 400);
+
+    const isJoin = p[2] === "join";
+    let lim = null;
+    if (isJoin) {
+      lim = limiter();
+      const c = await lim.rlCheck("joinfail", 10, 900000);
+      if (c.blocked) return json({ error: "Too many wrong tries. Try again in " + c.retry + " min." }, 429);
+    }
     const r = await env.COUPLE.get(env.COUPLE.idFromName(code)).act(p[2], body);
+    if (isJoin && (r.status === 403 || r.status === 404)) await lim.rlHit("joinfail", 900000);
     return json(r.data, r.status);
   },
 };
