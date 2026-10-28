@@ -44,7 +44,7 @@ h2{font-family:'Caveat',cursive;color:var(--gold);font-size:28px;margin:22px 0 8
 .cbar{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line)}
 .cbar button{height:44px}
 nav{display:flex;justify-content:space-around;background:#150f27;border-top:1px solid var(--line);padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px))}
-nav a{color:var(--mute);text-decoration:none;font-size:14px}
+nav a{color:var(--mute);text-decoration:none;font-size:13px}
 nav a.on{color:var(--gold);font-weight:700}
 </style>
 </head>
@@ -95,7 +95,7 @@ nav a.on{color:var(--gold);font-weight:700}
 </main>
 
 <nav>
-  <a href="/">Home</a><a href="/chat.html">Chat</a><a href="/music.html" class="on">Music</a><a href="/#memories">Memories</a><a href="/#note">Notes</a>
+  <a href="/">Home</a><a href="/chat.html">Chat</a><a href="/music.html" class="on">Music</a><a href="/profile.html">Profile</a><a href="/#memories">Memories</a><a href="/#note">Notes</a>
 </nav>
 
 <script>
@@ -149,7 +149,6 @@ function playVid(id){
   document.querySelector('main').scrollTop=0;
 }
 
-/* ---- search / link ---- */
 function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
 function item(x,btns){
   var d=el('div','it'),t=el('div','t');
@@ -183,7 +182,6 @@ function doGo(){
 $('go').onclick=doGo;
 $('q').onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();doGo()}};
 
-/* ---- playlist ---- */
 function renderPl(list){
   var sig=JSON.stringify(list);if(sig===plSig)return;plSig=sig;
   var box=$('playlist');box.innerHTML='';
@@ -196,7 +194,6 @@ function renderPl(list){
   });
 }
 
-/* ---- controls ---- */
 $('pp').onclick=function(){
   if(!ready||!curVid)return;
   useJoined();var p=curPos();
@@ -215,7 +212,6 @@ $('seek').onchange=function(){
   var p=+this.value;player.seekTo(p,true);send(isPlaying(),p);
 };
 
-/* ---- music sync ---- */
 function applyRemote(force){
   if(!ready||!remote)return;
   if(!force&&Date.now()-lastLocal<2500)return;
@@ -260,7 +256,6 @@ setInterval(function(){
   $('cur').textContent=fmt(c);$('dur').textContent=fmt(d);
 },500);
 
-/* ---- mini chat ---- */
 var cLast=0,cFirst=true,cMe=S.name,seenId=0;
 function cadd(m){
   var e=$('cempty');if(e)e.remove();
