@@ -122,6 +122,20 @@ export class Couple extends DurableObject {
       return m ? { status: 200, data: { media: m } } : { status: 404, data: { error: "Gone" } };
     }
 
+    if (action === "musicGet") {
+      return { status: 200, data: { now: Date.now(), music: s.music || null } };
+    }
+    if (action === "musicSet") {
+      const prev = s.music || {};
+      const vid = b.vid ? String(b.vid) : prev.vid;
+      if (!vid || !/^[A-Za-z0-9_-]{11}$/.test(vid)) {
+        return { status: 400, data: { error: "Invalid YouTube link" } };
+      }
+      s.music = { vid, playing: !!b.playing, pos: Math.max(0, Number(b.pos) || 0), at: Date.now(), by: me.name };
+      await save();
+      return { status: 200, data: { ok: true } };
+    }
+
     return { status: 400, data: { error: "Unknown action" } };
   }
 }
