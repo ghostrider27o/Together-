@@ -14,10 +14,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'DM Sans',system
 section{max-width:560px;margin:0 auto;padding:44px 20px}
 .hero{text-align:center;padding-top:60px;background:radial-gradient(circle at 50% 25%,#3b2d66 0,var(--bg) 65%)}
 .hero h1{font-size:60px;margin:0;color:var(--rose);line-height:1}
-.names{font-size:28px;color:var(--gold);margin:6px 0 20px;min-height:36px}
-.count{font-size:84px;font-weight:700;line-height:1;margin:0}
-.count small{display:block;font-size:16px;font-weight:400;color:var(--mute);margin-top:6px}
-.tick{color:var(--mute);margin:8px 0 0;font-variant-numeric:tabular-nums}
+.hi{font-size:30px;color:var(--gold);margin:10px 0 2px;min-height:40px}
 input,textarea{width:100%;background:var(--bg2);border:1px solid var(--line);color:var(--ink);padding:13px 14px;border-radius:12px;font:inherit}
 input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 button{font:inherit;cursor:pointer;border:0;border-radius:12px;padding:13px 18px;background:var(--rose);color:#2a1326;font-weight:700}
@@ -36,15 +33,12 @@ h2{font-size:34px;margin:0 0 6px;color:var(--gold)}
 .mem p{margin:2px 0 0;overflow-wrap:anywhere}
 .mem button{padding:2px 8px;font-size:12px;margin-top:4px}
 .row{display:grid;gap:10px;margin-bottom:10px}
-.codebox{background:var(--bg2);border:1px dashed var(--gold);border-radius:14px;padding:14px;margin:0 auto 6px;max-width:320px}
-.code{font-size:38px;letter-spacing:.2em;font-weight:700;color:var(--gold)}
 .err{color:#ff9aa8;min-height:22px;margin:6px 0 0}
-.games{margin-top:34px;text-align:center}
-.games h2{font-size:30px}
-.pinbox{background:var(--bg2);border:1px solid var(--gold);border-radius:14px;padding:16px;margin:22px auto 0;max-width:340px;display:none}
 .pin{text-align:center;letter-spacing:.4em;font-size:20px}
+.games{margin-top:30px;text-align:center}
+.games h2{font-size:30px}
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:space-around;background:#150f27ee;border-top:1px solid var(--line);padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px));backdrop-filter:blur(8px)}
-nav a{color:var(--mute);text-decoration:none;font-size:14px}
+nav a{color:var(--mute);text-decoration:none;font-size:13px}
 .heart{display:inline-block;animation:beat 1.6s ease-in-out infinite}
 @keyframes beat{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
 #app{display:none;padding-bottom:70px}
@@ -72,28 +66,8 @@ nav a{color:var(--mute);text-decoration:none;font-size:14px}
 <div id="app">
 <section class="hero" id="home">
   <h1 class="hand">Together <span class="heart">❤️</span></h1>
-  <div class="names hand" id="names"></div>
-  <p class="count" id="days">0<small id="since">days of us</small></p>
-  <p class="tick" id="tick"></p>
-  <div id="startBox" style="margin-top:22px">
-    <p class="note" style="margin:0 0 6px">When did your story begin?</p>
-    <div class="row"><input id="start" type="datetime-local"><button id="saveStart">Save date and time</button></div>
-  </div>
-  <div class="codebox" id="codeBox" style="margin-top:26px">
-    <div class="note" style="margin:0">Your couple code</div>
-    <div class="code" id="codeShow"></div>
-    <button class="ghost" id="copy" style="margin-top:8px;padding:8px 14px">Copy code</button>
-  </div>
-  <p class="note" id="waiting"></p>
-
-  <div class="pinbox" id="pinBox">
-    <p class="note" style="margin:0 0 8px">Your space has no PIN yet. Set a 4-digit PIN so only the two of you can rejoin.</p>
-    <div class="row">
-      <input id="newPin" class="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="4-digit PIN" autocomplete="off" aria-label="New 4-digit PIN">
-      <button id="setPin">Set PIN</button>
-    </div>
-    <p class="err" id="pinErr" style="margin:0"></p>
-  </div>
+  <div class="hi hand" id="hi"></div>
+  <p class="note" id="waiting" style="margin-top:0"></p>
 
   <div class="games">
     <h2 class="hand">Play</h2>
@@ -101,8 +75,6 @@ nav a{color:var(--mute);text-decoration:none;font-size:14px}
     <div class="tabs" id="tabs"></div>
     <div class="card"><p class="q" id="q">Tap the button to start.</p><button id="next">Next card</button></div>
   </div>
-
-  <button class="ghost" id="logout" style="margin-top:30px;padding:8px 14px;font-size:13px">Leave this space</button>
 </section>
 
 <section id="memories">
@@ -123,7 +95,7 @@ nav a{color:var(--mute);text-decoration:none;font-size:14px}
   <div class="card"><p class="q hand" id="love" style="font-size:30px">💌</p><button id="newLove">Show a note</button></div>
 </section>
 
-<nav><a href="#home">Home</a><a href="/chat.html">Chat</a><a href="/music.html">Music</a><a href="#memories">Memories</a><a href="#note">Notes</a></nav>
+<nav><a href="#home">Home</a><a href="/chat.html">Chat</a><a href="/music.html">Music</a><a href="/profile.html">Profile</a><a href="#memories">Memories</a><a href="#note">Notes</a></nav>
 </div>
 
 <script>
@@ -139,13 +111,11 @@ nav a{color:var(--mute);text-decoration:none;font-size:14px}
   var PINRE=/^\d{4}$/;
 
   var S=load('together:session');
-  var data=null, offset=0, timer=null, tickTimer=null;
+  var data=null,timer=null;
 
   function showApp(){
     $('gate').style.display='none';$('app').style.display='block';
-    $('codeShow').textContent=S.code;
-    sync();clearInterval(timer);timer=setInterval(sync,4000);
-    clearInterval(tickTimer);tickTimer=setInterval(tick,1000);
+    sync();clearInterval(timer);timer=setInterval(function(){if(!document.hidden)sync()},5000);
   }
   function gateErr(m){$('gErr').textContent=m||''}
   $('create').onclick=function(){
@@ -155,7 +125,8 @@ nav a{color:var(--mute);text-decoration:none;font-size:14px}
     gateErr('Creating...');
     api('create',{name:n,pin:p}).then(function(r){
       if(!r.ok){gateErr(r.j.error||'Something went wrong');return}
-      S={code:r.j.code,token:r.j.token,name:r.j.name};put('together:session',S);gateErr('');showApp();
+      S={code:r.j.code,token:r.j.token,name:r.j.name};put('together:session',S);gateErr('');
+      location.href='/profile.html';
     }).catch(function(){gateErr('No connection. Try again.')});
   };
   $('join').onclick=function(){
@@ -168,50 +139,18 @@ nav a{color:var(--mute);text-decoration:none;font-size:14px}
       S={code:c,token:r.j.token,name:r.j.name};put('together:session',S);gateErr('');showApp();
     }).catch(function(){gateErr('No connection. Try again.')});
   };
-  $('logout').onclick=function(){
-    if(!confirm('Leave this space on this phone? You can rejoin with the code, your name and the PIN.'))return;
-    try{localStorage.removeItem('together:session')}catch(e){}
-    location.reload();
-  };
-  $('copy').onclick=function(){
-    var t=S.code;
-    if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){$('copy').textContent='Copied'})}
-    else{$('copy').textContent=t}
-    setTimeout(function(){$('copy').textContent='Copy code'},1800);
-  };
-  $('setPin').onclick=function(){
-    var p=$('newPin').value.trim();
-    if(!PINRE.test(p)){$('pinErr').textContent='Use exactly 4 digits';return}
-    api(S.code+'/setPin',{token:S.token,pin:p}).then(function(r){
-      if(r.ok){$('newPin').value='';$('pinErr').textContent='';$('pinBox').style.display='none';alert('PIN set. Remember it, you will need it to rejoin.');sync()}
-      else $('pinErr').textContent=r.j.error||'Could not set PIN';
-    });
-  };
 
   function sync(){
     api(S.code+'/get',{token:S.token}).then(function(r){
       if(r.status===401||r.status===404){try{localStorage.removeItem('together:session')}catch(e){};location.reload();return}
       if(!r.ok)return;
-      data=r.j;offset=data.now-Date.now();render();
+      data=r.j;render();
     }).catch(function(){});
-  }
-  function pad(n){return n<10?'0'+n:''+n}
-  function tick(){
-    if(!data||!data.start){$('tick').textContent='';return}
-    var ms=Math.max(0,Date.now()+offset-data.start),s=Math.floor(ms/1000);
-    var d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),sec=s%60;
-    $('days').firstChild.nodeValue=d.toLocaleString();
-    $('since').textContent=d===1?'day of us':'days of us';
-    $('tick').textContent=pad(h)+'h '+pad(m)+'m '+pad(sec)+'s';
   }
   function fmt(ts){return new Date(ts).toLocaleString([], {day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'})}
   function render(){
-    $('names').textContent=data.names.join('  ♥  ');
-    $('waiting').textContent=data.names.length<2?'Waiting for your partner. Share the code above.':'';
-    $('pinBox').style.display=data.hasPin===false?'block':'none';
-    $('startBox').style.display=data.start?'none':'block';
-    if(!data.start){$('days').firstChild.nodeValue='0';$('tick').textContent=''}
-    tick();
+    $('hi').textContent='Hi, '+data.me+' 💜';
+    $('waiting').textContent=data.names.length<2?'Waiting for your partner. Open Profile to share your couple code.':'';
     var box=$('memList');
     if(!data.mems.length){box.innerHTML='<p class="note">No memories yet. Add the first one above.</p>';return}
     box.innerHTML=data.mems.map(function(m){
@@ -221,15 +160,6 @@ nav a{color:var(--mute);text-decoration:none;font-size:14px}
       b.onclick=function(){api(S.code+'/delMem',{token:S.token,id:b.dataset.id}).then(sync)};
     });
   }
-  $('saveStart').onclick=function(){
-    var v=$('start').value; if(!v){alert('Pick the date and time.');return}
-    api(S.code+'/setStart',{token:S.token,start:new Date(v).getTime()}).then(sync);
-  };
-  $('names').onclick=function(){
-    if(data&&data.start&&confirm('Change the start date and time?')){
-      data.start=null;$('startBox').style.display='block';
-    }
-  };
   $('addMem').onclick=function(){
     var t=$('mtext').value.trim(); if(!t){alert('Write something first.');return}
     var v=$('mdate').value;
