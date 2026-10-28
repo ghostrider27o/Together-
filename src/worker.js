@@ -8,6 +8,15 @@ const json = (data, status = 200) =>
   });
 const genCode = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(6)), (n) => CHARS[n % CHARS.length]).join("");
+const clean = (t) =>
+  String(t || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .slice(0, 120);
+const VID = /^[A-Za-z0-9_-]{11}$/;
 
 export class Couple extends DurableObject {
   async act(action, b) {
@@ -123,15 +132,69 @@ export class Couple extends DurableObject {
     }
 
     if (action === "musicGet") {
-      return { status: 200, data: { now: Date.now(), music: s.music || null } };
+      return { status: 200, data: { now: Date.now(), music: s.music || null, playlist: s.playlist || [] } };
     }
     if (action === "musicSet") {
       const prev = s.music || {};
       const vid = b.vid ? String(b.vid) : prev.vid;
-      if (!vid || !/^[A-Za-z0-9_-]{11}$/.test(vid)) {
+      if (!vid || !VID.test(vid)) {
         return { status: 400, data: { error: "Invalid YouTube link" } };
       }
       s.music = { vid, playing: !!b.playing, pos: Math.max(0, Number(b.pos) || 0), at: Date.now(), by: me.name };
+      await save();
+      return { status: 200, data: { ok: true } };
+    }
+
+    if (action === "search") {
+      const q = String(b.q || "").trim().slice(0, 100);
+      if (!q) return { status: 400, data: { error: "Type a song name" } };
+      const key = this.env.YOUTUBE_KEY;
+      if (!key) return { status: 500, data: { error: "Search is not set up yet" } };
+      this.cache = this.cache || {};
+      const ck = q.toLowerCase();
+      const hit = this.cache[ck];
+      if (hit && Date.now() - hit.t < 3600000) return { status: 200, data: { results: hit.r } };
+      const day = new Date().toISOString().slice(0, 10);
+      s.sq = s.sq && s.sq.day === day ? s.sq : { day, n: 0 };
+      if (s.sq.n >= 25) {
+        return { status: 429, data: { error: "Daily search limit reached. Use your playlist or paste a link." } };
+      }
+      s.sq.n++;
+      await save();
+      const u =
+        "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=8&q=" +
+        encodeURIComponent(q) +
+        "&key=" +
+        key;
+      let r;
+      try {
+        r = await fetch(u);
+      } catch (e) {
+        return { status: 502, data: { error: "Search failed. Try again." } };
+      }
+      if (!r.ok) {
+        return { status: 502, data: { error: r.status === 403 ? "Search quota is over for today" : "Search failed" } };
+      }
+      const j = await r.json();
+      const results = (j.items || [])
+        .filter((i) => i.id && i.id.videoId)
+        .map((i) => ({ vid: i.id.videoId, title: clean(i.snippet.title), by: clean(i.snippet.channelTitle) }));
+      this.cache[ck] = { t: Date.now(), r: results };
+      return { status: 200, data: { results } };
+    }
+
+    if (action === "plAdd") {
+      const vid = String(b.vid || "");
+      if (!VID.test(vid)) return { status: 400, data: { error: "Invalid song" } };
+      s.playlist = s.playlist || [];
+      if (s.playlist.some((x) => x.vid === vid)) return { status: 200, data: { ok: true } };
+      if (s.playlist.length >= 100) return { status: 400, data: { error: "Playlist is full (100 songs)" } };
+      s.playlist.push({ vid, title: clean(b.title), by: clean(b.by), add: me.name });
+      await save();
+      return { status: 200, data: { ok: true } };
+    }
+    if (action === "plDel") {
+      s.playlist = (s.playlist || []).filter((x) => x.vid !== b.vid);
       await save();
       return { status: 200, data: { ok: true } };
     }
