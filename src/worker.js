@@ -91,12 +91,31 @@ export class Couple extends DurableObject {
         const old = s.chat.shift();
         if (old.kind !== "text") await this.ctx.storage.delete("m:" + old.id);
       }
+      if (this.typing) delete this.typing[me.name];
       await save();
       return { status: 200, data: { ok: true, id } };
     }
     if (action === "chat") {
       const since = Number(b.since) || 0;
-      return { status: 200, data: { me: me.name, msgs: (s.chat || []).filter((m) => m.id > since) } };
+      const mySeen = Number(b.seen) || 0;
+      s.seen = s.seen || {};
+      if (mySeen > (s.seen[me.name] || 0)) {
+        s.seen[me.name] = mySeen;
+        await save();
+      }
+      this.typing = this.typing || {};
+      if (b.typing) this.typing[me.name] = Date.now();
+      const other = s.members.find((m) => m.name !== me.name);
+      return {
+        status: 200,
+        data: {
+          me: me.name,
+          msgs: (s.chat || []).filter((m) => m.id > since),
+          otherSeen: other ? s.seen[other.name] || 0 : 0,
+          otherName: other ? other.name : "",
+          typing: !!(other && Date.now() - (this.typing[other.name] || 0) < 5000),
+        },
+      };
     }
     if (action === "media") {
       const m = await this.ctx.storage.get("m:" + Number(b.id));
