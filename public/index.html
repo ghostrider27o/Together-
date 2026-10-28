@@ -39,6 +39,8 @@ h2{font-size:34px;margin:0 0 6px;color:var(--gold)}
 .codebox{background:var(--bg2);border:1px dashed var(--gold);border-radius:14px;padding:14px;margin:0 auto 6px;max-width:320px}
 .code{font-size:38px;letter-spacing:.2em;font-weight:700;color:var(--gold)}
 .err{color:#ff9aa8;min-height:22px;margin:6px 0 0}
+.games{margin-top:34px;text-align:center}
+.games h2{font-size:30px}
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:space-around;background:#150f27ee;border-top:1px solid var(--line);padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px));backdrop-filter:blur(8px)}
 nav a{color:var(--mute);text-decoration:none;font-size:14px}
 .heart{display:inline-block;animation:beat 1.6s ease-in-out infinite}
@@ -80,14 +82,15 @@ nav a{color:var(--mute);text-decoration:none;font-size:14px}
     <button class="ghost" id="copy" style="margin-top:8px;padding:8px 14px">Copy code</button>
   </div>
   <p class="note" id="waiting"></p>
-  <button class="ghost" id="logout" style="margin-top:14px;padding:8px 14px;font-size:13px">Leave this space</button>
-</section>
 
-<section id="play">
-  <h2 class="hand">Play</h2>
-  <p class="sub">Pick a game, tap the button, answer honestly.</p>
-  <div class="tabs" id="tabs"></div>
-  <div class="card"><p class="q" id="q">Tap the button to start.</p><button id="next">Next card</button></div>
+  <div class="games">
+    <h2 class="hand">Play</h2>
+    <p class="sub">Pick a game, tap the button, answer honestly.</p>
+    <div class="tabs" id="tabs"></div>
+    <div class="card"><p class="q" id="q">Tap the button to start.</p><button id="next">Next card</button></div>
+  </div>
+
+  <button class="ghost" id="logout" style="margin-top:30px;padding:8px 14px;font-size:13px">Leave this space</button>
 </section>
 
 <section id="memories">
@@ -108,7 +111,7 @@ nav a{color:var(--mute);text-decoration:none;font-size:14px}
   <div class="card"><p class="q hand" id="love" style="font-size:30px">💌</p><button id="newLove">Show a note</button></div>
 </section>
 
-<nav><a href="#home">Home</a><a href="/chat.html">Chat</a><a href="#play">Play</a><a href="#memories">Memories</a><a href="#note">Notes</a></nav>
+<nav><a href="#home">Home</a><a href="/chat.html">Chat</a><a href="/music.html">Music</a><a href="#memories">Memories</a><a href="#note">Notes</a></nav>
 </div>
 
 <script>
