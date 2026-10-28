@@ -60,7 +60,7 @@ nav a.on{color:var(--gold);font-weight:700}
 </div>
 
 <nav>
-  <a href="/">Home</a><a href="/chat.html" class="on">Chat</a><a href="/#play">Play</a><a href="/#memories">Memories</a><a href="/#note">Notes</a>
+  <a href="/">Home</a><a href="/chat.html" class="on">Chat</a><a href="/music.html">Music</a><a href="/#memories">Memories</a><a href="/#note">Notes</a>
 </nav>
 <div id="lb"><img alt=""></div>
 
@@ -75,9 +75,9 @@ nav a.on{color:var(--gold);font-weight:700}
       .then(function(r){return r.json().then(function(j){return {ok:r.ok,status:r.status,j:j}})});
   }
   var box=$('msgs'),last=0,me=S.name,first=true,pin=true;
-  var seenId=0;        // highest message id from the other person that I have seen
-  var lastTyped=0;     // when I last typed
-  var ticks={};        // my message id -> tick element
+  var seenId=0;
+  var lastTyped=0;
+  var ticks={};
 
   function pinned(){return box.scrollHeight-box.scrollTop-box.clientHeight<120}
   function toEnd(){box.scrollTop=box.scrollHeight}
@@ -145,7 +145,6 @@ nav a.on{color:var(--gold);font-weight:700}
   poll();setInterval(poll,2000);
   document.addEventListener('visibilitychange',function(){if(!document.hidden)poll()});
 
-  /* ---- text ---- */
   var txt=$('txt');
   txt.oninput=function(){
     txt.style.height='auto';txt.style.height=Math.min(txt.scrollHeight,110)+'px';
@@ -158,7 +157,6 @@ nav a.on{color:var(--gold);font-weight:700}
     api('send',{kind:'text',text:t}).then(sent).catch(function(){alert('No connection')});
   };
 
-  /* ---- photo ---- */
   function compress(f){
     return new Promise(function(res,rej){
       var img=new Image(),u=URL.createObjectURL(f);
@@ -181,7 +179,6 @@ nav a.on{color:var(--gold);font-weight:700}
   };
   $('lb').onclick=function(){this.style.display='none'};
 
-  /* ---- voice ---- */
   var rec,chunks,t0,rTimer,cancelled;
   function ui(on){$('bar').style.display=on?'none':'flex';$('rbar').style.display=on?'flex':'none'}
   $('mic').onclick=function(){
