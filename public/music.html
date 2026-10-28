@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Music · Together</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#1b1530;--bg2:#271f45;--ink:#f3eefc;--mute:#b4a9d6;--rose:#f6a6b8;--gold:#ffd79a;--line:#3a3163}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;display:flex;flex-direction:column}
+header{padding:12px 18px;border-bottom:1px solid var(--line);font-size:32px;color:var(--rose);font-family:'Caveat',cursive;text-align:center;line-height:1.1}
+main{flex:1;overflow-y:auto;padding:18px;max-width:560px;width:100%;margin:0 auto}
+.row{display:flex;gap:8px;margin-bottom:14px}
+input[type=text]{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--line);color:var(--ink);padding:12px 14px;border-radius:12px;font:inherit}
+input:focus,button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+button{font:inherit;cursor:pointer;border:0;border-radius:12px;background:var(--rose);color:#2a1326;font-weight:700;height:46px;padding:0 16px}
+button.ic{background:var(--bg2);border:1px solid var(--line);color:var(--ink);width:56px;padding:0;font-size:18px}
+button.big{width:76px;background:var(--rose);color:#2a1326;font-size:22px}
+.stage{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
+.stage iframe,.stage #yt{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--mute);padding:20px}
+#join{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:#150f27ee;flex-direction:column;gap:10px;z-index:2;text-align:center;padding:16px}
+.ctl{display:flex;justify-content:center;gap:12px;margin:16px 0 6px;align-items:center}
+.bar{display:flex;align-items:center;gap:10px;color:var(--mute);font-size:13px;font-variant-numeric:tabular-nums}
+input[type=range]{flex:1;accent-color:#f6a6b8}
+.status{text-align:center;color:var(--gold);margin:10px 0;min-height:22px}
+.note{color:var(--mute);font-size:13px;text-align:center;margin-top:14px}
+nav{display:flex;justify-content:space-around;background:#150f27;border-top:1px solid var(--line);padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px))}
+nav a{color:var(--mute);text-decoration:none;font-size:14px}
+nav a.on{color:var(--gold);font-weight:700}
+</style>
+</head>
+<body>
+<header>Our music 🎵</header>
+<main>
+  <div class="row">
+    <input type="text" id="link" placeholder="Paste a YouTube link" autocomplete="off">
+    <button id="load">Play</button>
+  </div>
+  <div class="stage">
+    <div class="ph" id="ph">Paste a YouTube link above to listen together.</div>
+    <div id="yt"></div>
+    <div id="join"><div id="joinTxt"></div><button id="joinBtn">Tap to join</button></div>
+  </div>
+  <div class="status" id="status"></div>
+  <div class="bar"><span id="cur">0:00</span><input type="range" id="seek" min="0" max="100" value="0" step="1" aria-label="Seek"><span id="dur">0:00</span></div>
+  <div class="ctl">
+    <button class="ic" id="back" aria-label="Back 10 seconds">−10</button>
+    <button class="big" id="pp" aria-label="Play or pause">▶</button>
+    <button class="ic" id="fwd" aria-label="Forward 10 seconds">+10</button>
+  </div>
+  <p class="note">Both of you need this page open. Whoever presses play, pause or seeks, it happens on both phones.</p>
+</main>
+
+<nav>
+  <a href="/">Home</a><a href="/chat.html">Chat</a><a href="/music.html" class="on">Music</a><a href="/#memories">Memories</a><a href="/#note">Notes</a>
+</nav>
+
+<script>
+var S=null;try{S=JSON.parse(localStorage.getItem('together:session'))}catch(e){}
+if(!S||!S.token)location.href='/';
+var $=function(id){return document.getElementById(id)};
+function api(a,b){
+  b=b||{};b.token=S.token;
+  return fetch('/api/'+S.code+'/'+a,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})
+    .then(function(r){return r.json().then(function(j){return {ok:r.ok,status:r.status,j:j}})});
+}
+var player=null,ready=false,curVid=null,joined=false,offset=0,lastLocal=0,remote=null,wantPlaying=false,dragging=false;
+
+function fmt(s){s=Math.max(0,Math.floor(s||0));return Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60}
+function parseId(t){
+  t=(t||'').trim();
+  var m=t.match(/(?:youtu\.be\/|v=|shorts\/|embed\/|live\/)([A-Za-z0-9_-]{11})/);
+  if(m)return m[1];
+  return /^[A-Za-z0-9_-]{11}$/.test(t)?t:null;
+}
+window.onYouTubeIframeAPIReady=function(){
+  player=new YT.Player('yt',{
+    playerVars:{controls:0,playsinline:1,rel:0,modestbranding:1,disablekb:1,fs:0},
+    events:{
+      onReady:function(){ready=true;poll()},
+      onStateChange:function(e){
+        $('pp').textContent=(e.data===1||e.data===3)?'❚❚':'▶';
+        if(e.data===0&&wantPlaying){wantPlaying=false;send(false,0)}
+      },
+      onError:function(){$('status').textContent='This video cannot be played here. Try another link.'}
+    }
+  });
+};
+var tag=document.createElement('script');tag.src='https://www.youtube.com/iframe_api';document.head.appendChild(tag);
+
+function send(playing,pos,vid){
+  lastLocal=Date.now();
+  var b={playing:playing,pos:pos};if(vid)b.vid=vid;
+  return api('musicSet',b).then(function(r){if(!r.ok)$('status').textContent=r.j.error||'Could not sync'});
+}
+function curPos(){return player&&ready?player.getCurrentTime()||0:0}
+function isPlaying(){if(!ready)return false;var s=player.getPlayerState();return s===1||s===3}
+
+function useJoined(){joined=true;$('join').style.display='none'}
+$('joinBtn').onclick=function(){useJoined();applyRemote(true)};
+
+$('load').onclick=function(){
+  var id=parseId($('link').value);
+  if(!id){$('status').textContent='That does not look like a YouTube link.';return}
+  if(!ready){$('status').textContent='Player is still loading, try again.';return}
+  useJoined();curVid=id;$('ph').style.display='none';wantPlaying=true;
+  player.loadVideoById(id,0);send(true,0,id);$('link').value='';$('status').textContent='';
+};
+$('pp').onclick=function(){
+  if(!ready||!curVid)return;
+  useJoined();var p=curPos();
+  if(isPlaying()){player.pauseVideo();wantPlaying=false;send(false,p)}
+  else{player.seekTo(p,true);player.playVideo();wantPlaying=true;send(true,p)}
+};
+function jump(d){
+  if(!ready||!curVid)return;
+  var p=Math.max(0,curPos()+d);player.seekTo(p,true);send(isPlaying(),p);
+}
+$('back').onclick=function(){jump(-10)};
+$('fwd').onclick=function(){jump(10)};
+$('seek').oninput=function(){dragging=true;$('cur').textContent=fmt(this.value)};
+$('seek').onchange=function(){
+  dragging=false;if(!ready||!curVid)return;
+  var p=+this.value;player.seekTo(p,true);send(isPlaying(),p);
+};
+
+function applyRemote(force){
+  if(!ready||!remote)return;
+  if(!force&&Date.now()-lastLocal<2500)return;
+  var m=remote;
+  var target=m.playing?m.pos+(Date.now()+offset-m.at)/1000:m.pos;
+  $('ph').style.display='none';
+  $('status').textContent=m.by+(m.playing?' is playing':' paused')+' · listening together';
+  if(m.vid!==curVid){
+    curVid=m.vid;
+    if(joined){m.playing?player.loadVideoById(m.vid,target):player.cueVideoById(m.vid,target);wantPlaying=m.playing}
+    else{player.cueVideoById(m.vid,target)}
+  }else if(joined){
+    var cur=curPos();
+    if(m.playing){
+      if(!isPlaying()){player.seekTo(target,true);player.playVideo()}
+      else if(Math.abs(cur-target)>2.5)player.seekTo(target,true);
+    }else{
+      if(isPlaying())player.pauseVideo();
+      if(Math.abs(cur-target)>1.5)player.seekTo(target,true);
+    }
+    wantPlaying=m.playing;
+  }
+  if(!joined&&m.playing){
+    $('joinTxt').textContent=m.by+' is playing a song. Tap to listen together.';
+    $('join').style.display='flex';
+  }
+}
+function poll(){
+  api('musicGet').then(function(r){
+    if(r.status===401||r.status===404){try{localStorage.removeItem('together:session')}catch(e){};location.href='/';return}
+    if(!r.ok)return;
+    offset=r.j.now-Date.now();remote=r.j.music;applyRemote(false);
+  }).catch(function(){});
+}
+setInterval(function(){if(!document.hidden)poll()},2000);
+document.addEventListener('visibilitychange',function(){if(!document.hidden)poll()});
+
+setInterval(function(){
+  if(!ready||!curVid||dragging)return;
+  var d=player.getDuration()||0,c=curPos();
+  $('seek').max=Math.max(1,Math.floor(d));$('seek').value=Math.floor(c);
+  $('cur').textContent=fmt(c);$('dur').textContent=fmt(d);
+},500);
+</script>
+</body>
+</html>
