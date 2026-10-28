@@ -41,6 +41,8 @@ h2{font-size:34px;margin:0 0 6px;color:var(--gold)}
 .err{color:#ff9aa8;min-height:22px;margin:6px 0 0}
 .games{margin-top:34px;text-align:center}
 .games h2{font-size:30px}
+.pinbox{background:var(--bg2);border:1px solid var(--gold);border-radius:14px;padding:16px;margin:22px auto 0;max-width:340px;display:none}
+.pin{text-align:center;letter-spacing:.4em;font-size:20px}
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:space-around;background:#150f27ee;border-top:1px solid var(--line);padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px));backdrop-filter:blur(8px)}
 nav a{color:var(--mute);text-decoration:none;font-size:14px}
 .heart{display:inline-block;animation:beat 1.6s ease-in-out infinite}
@@ -56,9 +58,10 @@ nav a{color:var(--mute);text-decoration:none;font-size:14px}
   <p class="sub" style="margin-top:10px">One shared space for the two of you.</p>
   <div class="row" style="margin-top:18px">
     <input id="gName" placeholder="Your name" autocomplete="off" maxlength="30">
+    <input id="gPin" class="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="4-digit PIN" autocomplete="off" aria-label="4-digit PIN">
     <button id="create">Create our space</button>
   </div>
-  <p class="note">or join your partner's space</p>
+  <p class="note">or join your partner's space (same name, their code and PIN)</p>
   <div class="row">
     <input id="gCode" placeholder="Enter 6-letter code" autocomplete="off" maxlength="6" style="text-transform:uppercase;text-align:center;letter-spacing:.2em">
     <button class="ghost" id="join">Join with code</button>
@@ -82,6 +85,15 @@ nav a{color:var(--mute);text-decoration:none;font-size:14px}
     <button class="ghost" id="copy" style="margin-top:8px;padding:8px 14px">Copy code</button>
   </div>
   <p class="note" id="waiting"></p>
+
+  <div class="pinbox" id="pinBox">
+    <p class="note" style="margin:0 0 8px">Your space has no PIN yet. Set a 4-digit PIN so only the two of you can rejoin.</p>
+    <div class="row">
+      <input id="newPin" class="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="4-digit PIN" autocomplete="off" aria-label="New 4-digit PIN">
+      <button id="setPin">Set PIN</button>
+    </div>
+    <p class="err" id="pinErr" style="margin:0"></p>
+  </div>
 
   <div class="games">
     <h2 class="hand">Play</h2>
@@ -124,6 +136,7 @@ nav a{color:var(--mute);text-decoration:none;font-size:14px}
     return fetch('/api/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})})
       .then(function(r){return r.json().then(function(j){return {ok:r.ok,status:r.status,j:j}})});
   }
+  var PINRE=/^\d{4}$/;
 
   var S=load('together:session');
   var data=null, offset=0, timer=null, tickTimer=null;
@@ -136,25 +149,27 @@ nav a{color:var(--mute);text-decoration:none;font-size:14px}
   }
   function gateErr(m){$('gErr').textContent=m||''}
   $('create').onclick=function(){
-    var n=$('gName').value.trim(); if(!n){gateErr('Enter your name first');return}
+    var n=$('gName').value.trim(),p=$('gPin').value.trim();
+    if(!n){gateErr('Enter your name first');return}
+    if(!PINRE.test(p)){gateErr('Choose a 4-digit PIN (numbers only)');return}
     gateErr('Creating...');
-    api('create',{name:n}).then(function(r){
+    api('create',{name:n,pin:p}).then(function(r){
       if(!r.ok){gateErr(r.j.error||'Something went wrong');return}
       S={code:r.j.code,token:r.j.token,name:r.j.name};put('together:session',S);gateErr('');showApp();
     }).catch(function(){gateErr('No connection. Try again.')});
   };
   $('join').onclick=function(){
-    var n=$('gName').value.trim(),c=$('gCode').value.trim().toUpperCase();
+    var n=$('gName').value.trim(),c=$('gCode').value.trim().toUpperCase(),p=$('gPin').value.trim();
     if(!n){gateErr('Enter your name first');return}
     if(c.length!==6){gateErr('The code has 6 characters');return}
     gateErr('Joining...');
-    api(c+'/join',{name:n}).then(function(r){
+    api(c+'/join',{name:n,pin:p}).then(function(r){
       if(!r.ok){gateErr(r.j.error||'Something went wrong');return}
       S={code:c,token:r.j.token,name:r.j.name};put('together:session',S);gateErr('');showApp();
     }).catch(function(){gateErr('No connection. Try again.')});
   };
   $('logout').onclick=function(){
-    if(!confirm('Leave this space on this phone? You can rejoin with the code and your name.'))return;
+    if(!confirm('Leave this space on this phone? You can rejoin with the code, your name and the PIN.'))return;
     try{localStorage.removeItem('together:session')}catch(e){}
     location.reload();
   };
@@ -163,6 +178,14 @@ nav a{color:var(--mute);text-decoration:none;font-size:14px}
     if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){$('copy').textContent='Copied'})}
     else{$('copy').textContent=t}
     setTimeout(function(){$('copy').textContent='Copy code'},1800);
+  };
+  $('setPin').onclick=function(){
+    var p=$('newPin').value.trim();
+    if(!PINRE.test(p)){$('pinErr').textContent='Use exactly 4 digits';return}
+    api(S.code+'/setPin',{token:S.token,pin:p}).then(function(r){
+      if(r.ok){$('newPin').value='';$('pinErr').textContent='';$('pinBox').style.display='none';alert('PIN set. Remember it, you will need it to rejoin.');sync()}
+      else $('pinErr').textContent=r.j.error||'Could not set PIN';
+    });
   };
 
   function sync(){
@@ -185,6 +208,7 @@ nav a{color:var(--mute);text-decoration:none;font-size:14px}
   function render(){
     $('names').textContent=data.names.join('  ♥  ');
     $('waiting').textContent=data.names.length<2?'Waiting for your partner. Share the code above.':'';
+    $('pinBox').style.display=data.hasPin===false?'block':'none';
     $('startBox').style.display=data.start?'none':'block';
     if(!data.start){$('days').firstChild.nodeValue='0';$('tick').textContent=''}
     tick();
