@@ -34,6 +34,15 @@ h2{font-family:'Caveat',cursive;color:var(--gold);font-size:28px;margin:22px 0 8
 .it .t b{display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .it .t span{display:block;font-size:12px;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .note{color:var(--mute);font-size:13px;text-align:center;margin:10px 0}
+.chat{margin-top:16px;background:var(--bg2);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+#cmsgs{height:190px;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:6px}
+.m{max-width:82%;padding:6px 11px;border-radius:14px;font-size:14px;overflow-wrap:anywhere;white-space:pre-wrap}
+.m.me{align-self:flex-end;background:var(--rose);color:#2a1326;border-bottom-right-radius:4px}
+.m.th{align-self:flex-start;background:var(--bg);border:1px solid var(--line);border-bottom-left-radius:4px}
+.emo{display:flex;gap:6px;padding:0 8px 6px}
+.emo button{height:34px;width:42px;padding:0;font-size:17px;background:var(--bg);border:1px solid var(--line)}
+.cbar{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line)}
+.cbar button{height:44px}
 nav{display:flex;justify-content:space-around;background:#150f27;border-top:1px solid var(--line);padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px))}
 nav a{color:var(--mute);text-decoration:none;font-size:14px}
 nav a.on{color:var(--gold);font-weight:700}
@@ -58,6 +67,21 @@ nav a.on{color:var(--gold);font-weight:700}
     <button class="ic" id="back" aria-label="Back 10 seconds">−10</button>
     <button class="big" id="pp" aria-label="Play or pause">▶</button>
     <button class="ic" id="fwd" aria-label="Forward 10 seconds">+10</button>
+  </div>
+
+  <div class="chat">
+    <div id="cmsgs"><p class="note" id="cempty">No messages yet. Say something while you listen.</p></div>
+    <div class="emo">
+      <button data-e="❤️" aria-label="Send heart">❤️</button>
+      <button data-e="😂" aria-label="Send laughing">😂</button>
+      <button data-e="🔥" aria-label="Send fire">🔥</button>
+      <button data-e="🥹" aria-label="Send emotional">🥹</button>
+      <button data-e="👏" aria-label="Send clap">👏</button>
+    </div>
+    <div class="cbar">
+      <input type="text" id="ctxt" placeholder="Message" maxlength="1000" autocomplete="off" enterkeyhint="send">
+      <button id="csend">Send</button>
+    </div>
   </div>
 
   <div id="resBox" style="display:none">
@@ -122,7 +146,7 @@ function playVid(id){
   if(!ready){$('status').textContent='Player is still loading, try again.';return}
   useJoined();curVid=id;$('ph').style.display='none';wantPlaying=true;
   player.loadVideoById(id,0);send(true,0,id);$('status').textContent='';
-  window.scrollTo(0,0);document.querySelector('main').scrollTop=0;
+  document.querySelector('main').scrollTop=0;
 }
 
 /* ---- search / link ---- */
@@ -191,7 +215,7 @@ $('seek').onchange=function(){
   var p=+this.value;player.seekTo(p,true);send(isPlaying(),p);
 };
 
-/* ---- sync ---- */
+/* ---- music sync ---- */
 function applyRemote(force){
   if(!ready||!remote)return;
   if(!force&&Date.now()-lastLocal<2500)return;
@@ -227,7 +251,7 @@ function poll(){
   }).catch(function(){});
 }
 setInterval(function(){if(!document.hidden)poll()},2000);
-document.addEventListener('visibilitychange',function(){if(!document.hidden)poll()});
+document.addEventListener('visibilitychange',function(){if(!document.hidden){poll();cpoll()}});
 
 setInterval(function(){
   if(!ready||!curVid||dragging)return;
@@ -235,6 +259,40 @@ setInterval(function(){
   $('seek').max=Math.max(1,Math.floor(d));$('seek').value=Math.floor(c);
   $('cur').textContent=fmt(c);$('dur').textContent=fmt(d);
 },500);
+
+/* ---- mini chat ---- */
+var cLast=0,cFirst=true,cMe=S.name,seenId=0;
+function cadd(m){
+  var e=$('cempty');if(e)e.remove();
+  var mine=m.by===cMe;
+  var t=m.kind==='image'?'📷 Photo (open Chat to view)':m.kind==='voice'?'🎤 Voice message (open Chat to play)':m.text;
+  $('cmsgs').appendChild(el('div','m '+(mine?'me':'th'),t));
+}
+function cpoll(){
+  if(document.hidden&&!cFirst)return;
+  api('chat',{since:cLast,seen:seenId}).then(function(r){
+    if(r.status===401||r.status===404){try{localStorage.removeItem('together:session')}catch(e){};location.href='/';return}
+    if(!r.ok)return;
+    cMe=r.j.me;
+    var all=r.j.msgs,show=cFirst&&all.length>30?all.slice(-30):all;
+    var box=$('cmsgs'),pin=cFirst||(box.scrollHeight-box.scrollTop-box.clientHeight<70);
+    all.forEach(function(m){
+      if(m.id>cLast)cLast=m.id;
+      if(m.by!==cMe&&m.id>seenId&&!document.hidden)seenId=m.id;
+    });
+    show.forEach(cadd);
+    if(show.length&&pin)box.scrollTop=box.scrollHeight;
+    cFirst=false;
+  }).catch(function(){});
+}
+function csend(t){
+  t=(t||'').trim();if(!t)return;
+  api('send',{kind:'text',text:t}).then(function(r){if(r.ok)cpoll()});
+}
+$('csend').onclick=function(){var v=$('ctxt').value;$('ctxt').value='';csend(v)};
+$('ctxt').onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();var v=this.value;this.value='';csend(v)}};
+document.querySelectorAll('.emo button').forEach(function(b){b.onclick=function(){csend(b.dataset.e)}});
+cpoll();setInterval(cpoll,2000);
 </script>
 </body>
 </html>
