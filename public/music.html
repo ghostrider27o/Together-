@@ -18,6 +18,7 @@ input:focus,button:focus-visible{outline:2px solid var(--gold);outline-offset:2p
 button{font:inherit;cursor:pointer;border:0;border-radius:12px;background:var(--rose);color:#2a1326;font-weight:700;height:46px;padding:0 16px}
 button.ic{background:var(--bg2);border:1px solid var(--line);color:var(--ink);width:56px;padding:0;font-size:18px}
 button.big{width:76px;background:var(--rose);color:#2a1326;font-size:22px}
+button.sm{height:36px;width:40px;padding:0;font-size:16px;background:var(--bg2);border:1px solid var(--line);color:var(--ink)}
 .stage{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
 .stage iframe,.stage #yt{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--mute);padding:20px}
@@ -26,7 +27,13 @@ button.big{width:76px;background:var(--rose);color:#2a1326;font-size:22px}
 .bar{display:flex;align-items:center;gap:10px;color:var(--mute);font-size:13px;font-variant-numeric:tabular-nums}
 input[type=range]{flex:1;accent-color:#f6a6b8}
 .status{text-align:center;color:var(--gold);margin:10px 0;min-height:22px}
-.note{color:var(--mute);font-size:13px;text-align:center;margin-top:14px}
+h2{font-family:'Caveat',cursive;color:var(--gold);font-size:28px;margin:22px 0 8px}
+.list{display:grid;gap:8px}
+.it{display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:8px 8px 8px 12px}
+.it .t{flex:1;min-width:0}
+.it .t b{display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it .t span{display:block;font-size:12px;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note{color:var(--mute);font-size:13px;text-align:center;margin:10px 0}
 nav{display:flex;justify-content:space-around;background:#150f27;border-top:1px solid var(--line);padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px))}
 nav a{color:var(--mute);text-decoration:none;font-size:14px}
 nav a.on{color:var(--gold);font-weight:700}
@@ -36,11 +43,12 @@ nav a.on{color:var(--gold);font-weight:700}
 <header>Our music 🎵</header>
 <main>
   <div class="row">
-    <input type="text" id="link" placeholder="Paste a YouTube link" autocomplete="off">
-    <button id="load">Play</button>
+    <input type="text" id="q" placeholder="Search a song or paste a link" autocomplete="off" enterkeyhint="search">
+    <button id="go">Go</button>
   </div>
+
   <div class="stage">
-    <div class="ph" id="ph">Paste a YouTube link above to listen together.</div>
+    <div class="ph" id="ph">Search a song above to listen together.</div>
     <div id="yt"></div>
     <div id="join"><div id="joinTxt"></div><button id="joinBtn">Tap to join</button></div>
   </div>
@@ -51,7 +59,15 @@ nav a.on{color:var(--gold);font-weight:700}
     <button class="big" id="pp" aria-label="Play or pause">▶</button>
     <button class="ic" id="fwd" aria-label="Forward 10 seconds">+10</button>
   </div>
-  <p class="note">Both of you need this page open. Whoever presses play, pause or seeks, it happens on both phones.</p>
+
+  <div id="resBox" style="display:none">
+    <h2>Search results</h2>
+    <div class="list" id="results"></div>
+  </div>
+
+  <h2>Our playlist 💜</h2>
+  <div class="list" id="playlist"><p class="note">No songs yet. Tap ＋ on a search result to save it here.</p></div>
+  <p class="note">Both of you need this page open. Play, pause or seek on one phone happens on both.</p>
 </main>
 
 <nav>
@@ -67,7 +83,7 @@ function api(a,b){
   return fetch('/api/'+S.code+'/'+a,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})
     .then(function(r){return r.json().then(function(j){return {ok:r.ok,status:r.status,j:j}})});
 }
-var player=null,ready=false,curVid=null,joined=false,offset=0,lastLocal=0,remote=null,wantPlaying=false,dragging=false;
+var player=null,ready=false,curVid=null,joined=false,offset=0,lastLocal=0,remote=null,wantPlaying=false,dragging=false,plSig='';
 
 function fmt(s){s=Math.max(0,Math.floor(s||0));return Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60}
 function parseId(t){
@@ -85,7 +101,7 @@ window.onYouTubeIframeAPIReady=function(){
         $('pp').textContent=(e.data===1||e.data===3)?'❚❚':'▶';
         if(e.data===0&&wantPlaying){wantPlaying=false;send(false,0)}
       },
-      onError:function(){$('status').textContent='This video cannot be played here. Try another link.'}
+      onError:function(){$('status').textContent='This video cannot be played here. Try another one.'}
     }
   });
 };
@@ -102,13 +118,61 @@ function isPlaying(){if(!ready)return false;var s=player.getPlayerState();return
 function useJoined(){joined=true;$('join').style.display='none'}
 $('joinBtn').onclick=function(){useJoined();applyRemote(true)};
 
-$('load').onclick=function(){
-  var id=parseId($('link').value);
-  if(!id){$('status').textContent='That does not look like a YouTube link.';return}
+function playVid(id){
   if(!ready){$('status').textContent='Player is still loading, try again.';return}
   useJoined();curVid=id;$('ph').style.display='none';wantPlaying=true;
-  player.loadVideoById(id,0);send(true,0,id);$('link').value='';$('status').textContent='';
-};
+  player.loadVideoById(id,0);send(true,0,id);$('status').textContent='';
+  window.scrollTo(0,0);document.querySelector('main').scrollTop=0;
+}
+
+/* ---- search / link ---- */
+function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
+function item(x,btns){
+  var d=el('div','it'),t=el('div','t');
+  t.appendChild(el('b',null,x.title||'Untitled'));
+  if(x.by)t.appendChild(el('span',null,x.by));
+  d.appendChild(t);btns.forEach(function(b){d.appendChild(b)});return d;
+}
+function btn(label,aria,fn){var b=el('button','sm',label);b.setAttribute('aria-label',aria);b.onclick=fn;return b}
+
+function doGo(){
+  var v=$('q').value.trim();if(!v)return;
+  var id=parseId(v);
+  if(id){playVid(id);$('q').value='';return}
+  $('status').textContent='Searching...';
+  api('search',{q:v}).then(function(r){
+    if(!r.ok){$('status').textContent=r.j.error||'Search failed';return}
+    $('status').textContent='';
+    var box=$('results');box.innerHTML='';
+    if(!r.j.results.length){box.appendChild(el('p','note','No results. Try different words.'))}
+    r.j.results.forEach(function(x){
+      var add=btn('＋','Save to playlist',function(){
+        api('plAdd',{vid:x.vid,title:x.title,by:x.by}).then(function(r2){
+          if(r2.ok){add.textContent='✓';poll()}else $('status').textContent=r2.j.error||'Could not save';
+        });
+      });
+      box.appendChild(item(x,[btn('▶','Play now',function(){playVid(x.vid)}),add]));
+    });
+    $('resBox').style.display='block';
+  }).catch(function(){$('status').textContent='No connection.'});
+}
+$('go').onclick=doGo;
+$('q').onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();doGo()}};
+
+/* ---- playlist ---- */
+function renderPl(list){
+  var sig=JSON.stringify(list);if(sig===plSig)return;plSig=sig;
+  var box=$('playlist');box.innerHTML='';
+  if(!list.length){box.appendChild(el('p','note','No songs yet. Tap ＋ on a search result to save it here.'));return}
+  list.forEach(function(x){
+    var del=btn('✕','Remove from playlist',function(){
+      if(confirm('Remove this song from the playlist?'))api('plDel',{vid:x.vid}).then(poll);
+    });
+    box.appendChild(item({title:x.title,by:'added by '+(x.add||'')},[btn('▶','Play now',function(){playVid(x.vid)}),del]));
+  });
+}
+
+/* ---- controls ---- */
 $('pp').onclick=function(){
   if(!ready||!curVid)return;
   useJoined();var p=curPos();
@@ -127,6 +191,7 @@ $('seek').onchange=function(){
   var p=+this.value;player.seekTo(p,true);send(isPlaying(),p);
 };
 
+/* ---- sync ---- */
 function applyRemote(force){
   if(!ready||!remote)return;
   if(!force&&Date.now()-lastLocal<2500)return;
@@ -158,7 +223,7 @@ function poll(){
   api('musicGet').then(function(r){
     if(r.status===401||r.status===404){try{localStorage.removeItem('together:session')}catch(e){};location.href='/';return}
     if(!r.ok)return;
-    offset=r.j.now-Date.now();remote=r.j.music;applyRemote(false);
+    offset=r.j.now-Date.now();remote=r.j.music;renderPl(r.j.playlist||[]);applyRemote(false);
   }).catch(function(){});
 }
 setInterval(function(){if(!document.hidden)poll()},2000);
