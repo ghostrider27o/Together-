@@ -8,23 +8,31 @@ const json = (data, status = 200) =>
   });
 const genCode = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(6)), (n) => CHARS[n % CHARS.length]).join("");
-const clean = (t) =>
-  String(t || "")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .slice(0, 120);
-const VID = /^[A-Za-z0-9_-]{11}$/;
 const PIN = /^\d{4}$/;
 const LOCK_MS = 15 * 60 * 1000;
+const MAX_TRACKS = 10;
+const MAX_BYTES = 10 * 1024 * 1024;
+const CHUNK = 700 * 1024;
 const hex = (buf) => Array.from(new Uint8Array(buf), (x) => x.toString(16).padStart(2, "0")).join("");
 const hashPin = async (pin, salt) =>
   hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(salt + ":" + pin)));
 
+const COOKIE = "tg";
+const YEAR = 31536000;
+const setCookie = (v, age) => `${COOKIE}=${v}; Path=/; Max-Age=${age}; HttpOnly; Secure; SameSite=Lax`;
+const withCookie = (res, c) => {
+  res.headers.append("Set-Cookie", c);
+  return res;
+};
+const readCookie = (req) => {
+  const m = (req.headers.get("Cookie") || "")
+    .split(";")
+    .map((x) => x.trim())
+    .find((x) => x.startsWith(COOKIE + "="));
+  return m ? m.slice(COOKIE.length + 1) : "";
+};
+
 export class Couple extends DurableObject {
-  // Simple rate limiter (used with special "rl:<ip>" instances)
   async rlCheck(kind, max, win) {
     const d = (await this.ctx.storage.get(kind)) || { n: 0, t: 0 };
     if (Date.now() - d.t > win) return { blocked: false };
@@ -35,6 +43,9 @@ export class Couple extends DurableObject {
     if (Date.now() - d.t > win) d = { n: 0, t: Date.now() };
     d.n++;
     await this.ctx.storage.put(kind, d);
+  }
+  async dropChunks(t) {
+    for (let i = 0; i < t.n; i++) await this.ctx.storage.delete("a:" + t.id + ":" + i);
   }
 
   async act(action, b) {
@@ -187,6 +198,8 @@ export class Couple extends DurableObject {
       await save();
       return { status: 200, data: { ok: true, id } };
     }
+
+    // Chat + room state in one call (messages, seen/typing, shared music state, song list, call presence)
     if (action === "chat") {
       const since = Number(b.since) || 0;
       const mySeen = Number(b.seen) || 0;
@@ -201,11 +214,19 @@ export class Couple extends DurableObject {
       return {
         status: 200,
         data: {
+          now: Date.now(),
           me: me.name,
+          names: s.members.map((m) => m.name),
+          pics: s.picv || {},
           msgs: (s.chat || []).filter((m) => m.id > since),
           otherSeen: other ? s.seen[other.name] || 0 : 0,
           otherName: other ? other.name : "",
           typing: !!(other && Date.now() - (this.typing[other.name] || 0) < 5000),
+          callOn: !!(other && this.sig && Date.now() - (this.sig.on[other.name] || 0) < 6000),
+          music: s.music || null,
+          lib: (s.lib || [])
+            .filter((t) => t.ready)
+            .map((t) => ({ id: t.id, name: t.name, size: t.size, mime: t.mime, n: t.n, by: t.by })),
         },
       };
     }
@@ -214,70 +235,105 @@ export class Couple extends DurableObject {
       return m ? { status: 200, data: { media: m } } : { status: 404, data: { error: "Gone" } };
     }
 
-    if (action === "musicGet") {
-      return { status: 200, data: { now: Date.now(), music: s.music || null, playlist: s.playlist || [] } };
+    // ---- Voice call signaling (short-lived, kept in memory) ----
+    if (action === "rtcGet") {
+      const now = Date.now();
+      this.sig = this.sig || { seq: 0, q: [], on: {} };
+      if (b.in) this.sig.on[me.name] = now;
+      else delete this.sig.on[me.name];
+      this.sig.q = this.sig.q.filter((m) => now - m.t < 60000);
+      const other = s.members.find((m) => m.name !== me.name);
+      const since = Number(b.since) || 0;
+      return {
+        status: 200,
+        data: {
+          seq: this.sig.seq,
+          msgs: b.fresh ? [] : this.sig.q.filter((m) => m.to === me.name && m.id > since),
+          other: !!(other && now - (this.sig.on[other.name] || 0) < 6000),
+          otherName: other ? other.name : "",
+        },
+      };
     }
-    if (action === "musicSet") {
-      const prev = s.music || {};
-      const vid = b.vid ? String(b.vid) : prev.vid;
-      if (!vid || !VID.test(vid)) {
-        return { status: 400, data: { error: "Invalid YouTube link" } };
-      }
-      s.music = { vid, playing: !!b.playing, pos: Math.max(0, Number(b.pos) || 0), at: Date.now(), by: me.name };
-      await save();
+    if (action === "rtcSend") {
+      const other = s.members.find((m) => m.name !== me.name);
+      if (!other) return { status: 400, data: { error: "Partner has not joined yet" } };
+      if (!b.m || JSON.stringify(b.m).length > 12000) return { status: 400, data: { error: "Bad signal" } };
+      this.sig = this.sig || { seq: 0, q: [], on: {} };
+      this.sig.seq++;
+      this.sig.q.push({ id: this.sig.seq, to: other.name, t: Date.now(), m: b.m });
+      if (this.sig.q.length > 200) this.sig.q.shift();
       return { status: 200, data: { ok: true } };
     }
 
-    if (action === "search") {
-      const q = String(b.q || "").trim().slice(0, 100);
-      if (!q) return { status: 400, data: { error: "Type a song name" } };
-      const key = this.env.YOUTUBE_KEY;
-      if (!key) return { status: 500, data: { error: "Search is not set up yet" } };
-      this.cache = this.cache || {};
-      const ck = q.toLowerCase();
-      const hit = this.cache[ck];
-      if (hit && Date.now() - hit.t < 3600000) return { status: 200, data: { results: hit.r } };
-      const day = new Date().toISOString().slice(0, 10);
-      s.sq = s.sq && s.sq.day === day ? s.sq : { day, n: 0 };
-      if (s.sq.n >= 25) {
-        return { status: 429, data: { error: "Daily search limit reached. Use your playlist or paste a link." } };
+    // ---- Songs: private library for this couple, stored in chunks ----
+    if (action === "libInit") {
+      const size = Number(b.size);
+      if (!Number.isFinite(size) || size <= 0) return { status: 400, data: { error: "Bad file" } };
+      if (size > MAX_BYTES) return { status: 400, data: { error: "Song is too big (max 10 MB)" } };
+      s.lib = s.lib || [];
+      const keep = [];
+      for (const t of s.lib) {
+        if (t.ready || Date.now() - t.ts < 3600000) keep.push(t);
+        else await this.dropChunks(t);
       }
-      s.sq.n++;
+      s.lib = keep;
+      if (s.lib.length >= MAX_TRACKS) {
+        return { status: 400, data: { error: "Library is full (10 songs). Remove one first." } };
+      }
+      const mime = /^audio\//.test(String(b.mime || "")) ? String(b.mime).slice(0, 40) : "audio/mpeg";
+      const id = crypto.randomUUID().slice(0, 8);
+      s.lib.push({
+        id,
+        name: String(b.name || "Song").replace(/[<>]/g, "").slice(0, 80),
+        size,
+        mime,
+        n: Math.ceil(size / CHUNK),
+        have: [],
+        ready: false,
+        by: me.name,
+        ts: Date.now(),
+      });
       await save();
-      const u =
-        "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=8&q=" +
-        encodeURIComponent(q) +
-        "&key=" +
-        key;
-      let r;
-      try {
-        r = await fetch(u);
-      } catch (e) {
-        return { status: 502, data: { error: "Search failed. Try again." } };
-      }
-      if (!r.ok) {
-        return { status: 502, data: { error: r.status === 403 ? "Search quota is over for today" : "Search failed" } };
-      }
-      const j = await r.json();
-      const results = (j.items || [])
-        .filter((i) => i.id && i.id.videoId)
-        .map((i) => ({ vid: i.id.videoId, title: clean(i.snippet.title), by: clean(i.snippet.channelTitle) }));
-      this.cache[ck] = { t: Date.now(), r: results };
-      return { status: 200, data: { results } };
+      return { status: 200, data: { id, chunk: CHUNK } };
     }
-
-    if (action === "plAdd") {
-      const vid = String(b.vid || "");
-      if (!VID.test(vid)) return { status: 400, data: { error: "Invalid song" } };
-      s.playlist = s.playlist || [];
-      if (s.playlist.some((x) => x.vid === vid)) return { status: 200, data: { ok: true } };
-      if (s.playlist.length >= 100) return { status: 400, data: { error: "Playlist is full (100 songs)" } };
-      s.playlist.push({ vid, title: clean(b.title), by: clean(b.by), add: me.name });
+    if (action === "libPut") {
+      const t = (s.lib || []).find((x) => x.id === b.id && !x.ready && x.by === me.name);
+      const i = Number(b.i);
+      const d = String(b.d || "");
+      if (!t || !Number.isInteger(i) || i < 0 || i >= t.n) return { status: 400, data: { error: "Bad part" } };
+      if (d.length > 940000 || !/^[A-Za-z0-9+/=]+$/.test(d)) return { status: 400, data: { error: "Bad data" } };
+      await this.ctx.storage.put("a:" + t.id + ":" + i, d);
+      if (!t.have.includes(i)) t.have.push(i);
+      if (t.have.length === t.n) {
+        t.ready = true;
+        t.have = [];
+      }
+      await save();
+      return { status: 200, data: { ok: true, ready: t.ready } };
+    }
+    if (action === "libGet") {
+      const t = (s.lib || []).find((x) => x.id === b.id && x.ready);
+      const i = Number(b.i);
+      if (!t || !Number.isInteger(i) || i < 0 || i >= t.n) return { status: 404, data: { error: "Gone" } };
+      const d = await this.ctx.storage.get("a:" + t.id + ":" + i);
+      return d ? { status: 200, data: { d } } : { status: 404, data: { error: "Gone" } };
+    }
+    if (action === "libDel") {
+      const t = (s.lib || []).find((x) => x.id === b.id);
+      if (!t) return { status: 200, data: { ok: true } };
+      await this.dropChunks(t);
+      s.lib = s.lib.filter((x) => x.id !== b.id);
+      if (s.music && s.music.id === b.id) s.music = null;
       await save();
       return { status: 200, data: { ok: true } };
     }
-    if (action === "plDel") {
-      s.playlist = (s.playlist || []).filter((x) => x.vid !== b.vid);
+    if (action === "playSet") {
+      const t = (s.lib || []).find((x) => x.id === b.id && x.ready);
+      if (!t) return { status: 400, data: { error: "Song not found" } };
+      const now = Date.now();
+      let at = Number(b.at);
+      if (!Number.isFinite(at) || Math.abs(at - now) > 5000) at = now;
+      s.music = { id: t.id, playing: !!b.playing, pos: Math.max(0, Number(b.pos) || 0), at, by: me.name };
       await save();
       return { status: 200, data: { ok: true } };
     }
@@ -295,6 +351,23 @@ export default {
     const ip = req.headers.get("CF-Connecting-IP") || "unknown";
     const limiter = () => env.COUPLE.get(env.COUPLE.idFromName("rl:" + ip));
 
+    if (p[1] === "logout") return withCookie(json({ ok: true }), setCookie("", 0));
+
+    if (p[1] === "resume") {
+      let code = "";
+      let token = "";
+      if (body.code && body.token) {
+        code = String(body.code).toUpperCase();
+        token = String(body.token);
+      } else {
+        [code, token] = readCookie(req).split(".");
+      }
+      if (!/^[A-Z2-9]{6}$/.test(code || "") || !token) return json({ error: "No session" }, 401);
+      const r = await env.COUPLE.get(env.COUPLE.idFromName(code)).act("get", { token });
+      if (r.status !== 200) return withCookie(json({ error: "No session" }, 401), setCookie("", 0));
+      return withCookie(json({ code, token, name: r.data.me }), setCookie(code + "." + token, YEAR));
+    }
+
     if (p[1] === "create") {
       const lim = limiter();
       const c = await lim.rlCheck("create", 5, 3600000);
@@ -304,7 +377,10 @@ export default {
       for (let i = 0; i < 5; i++) {
         const code = genCode();
         const r = await env.COUPLE.get(env.COUPLE.idFromName(code)).act("create", body);
-        if (r.status === 200) await lim.rlHit("create", 3600000);
+        if (r.status === 200) {
+          await lim.rlHit("create", 3600000);
+          return withCookie(json({ ...r.data, code }, 200), setCookie(code + "." + r.data.token, YEAR));
+        }
         if (r.status !== 409) return json({ ...r.data, code }, r.status);
       }
       return json({ error: "Try again" }, 500);
@@ -322,6 +398,9 @@ export default {
     }
     const r = await env.COUPLE.get(env.COUPLE.idFromName(code)).act(p[2], body);
     if (isJoin && (r.status === 403 || r.status === 404)) await lim.rlHit("joinfail", 900000);
+    if (isJoin && r.status === 200) {
+      return withCookie(json(r.data, 200), setCookie(code + "." + r.data.token, YEAR));
+    }
     return json(r.data, r.status);
   },
 };
