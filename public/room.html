@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Room · Together</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#1b1530;--bg2:#271f45;--ink:#f3eefc;--mute:#b4a9d6;--rose:#f6a6b8;--gold:#ffd79a;--line:#3a3163}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:radial-gradient(circle at 50% 0,#33295e 0,var(--bg) 60%);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;display:flex;flex-direction:column}
+.hand{font-family:'Caveat',cursive,serif}
+button{font:inherit;cursor:pointer;border:0;border-radius:12px;background:var(--rose);color:#2a1326;font-weight:700;height:44px;padding:0 16px}
+button.ic{width:44px;padding:0;font-size:20px;background:var(--bg2);border:1px solid var(--line);color:var(--ink)}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+input,textarea{font:inherit}
+button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.top{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.back{color:var(--ink);text-decoration:none;font-size:28px;line-height:1;padding:0 6px}
+.ttl{flex:1;min-width:0}
+.ttl b{display:block;font-size:22px;color:var(--rose);line-height:1.1}
+.ttl small{color:var(--mute);font-size:12px}
+.pill{max-width:48%;display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:0 14px;height:40px;font-size:13px;font-weight:500}
+.pill span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eq{display:none;gap:2px;height:14px;align-items:flex-end}
+.eq i{width:3px;background:var(--gold);border-radius:2px;animation:eq .9s ease-in-out infinite}
+.eq i:nth-child(2){animation-delay:.2s}.eq i:nth-child(3){animation-delay:.4s}
+.playing .eq{display:flex}
+@keyframes eq{0%,100%{height:3px}50%{height:14px}}
+.seats{display:flex;align-items:flex-start;justify-content:center;gap:14px;padding:14px 10px 8px}
+.seat{width:104px;text-align:center}
+.sav{width:84px;height:84px;margin:0 auto 6px;border-radius:50%;border:3px solid var(--gold);background:var(--bg2);overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:34px;color:var(--gold)}
+.sav img{width:100%;height:100%;object-fit:cover;display:none}
+.seat.me .sav{border-color:var(--rose)}
+.seat .n{font-size:24px;color:var(--gold);line-height:1.1;overflow-wrap:anywhere}
+.seat .t{font-size:11px;color:var(--mute)}
+.hrt{font-size:28px;margin-top:26px}
+.live .sav{animation:glow 1.6s ease-in-out infinite}
+.live .hrt{animation:beat 1.2s ease-in-out infinite}
+@keyframes glow{0%,100%{box-shadow:0 0 0 0 #ffd79a55}50%{box-shadow:0 0 0 10px #ffd79a00}}
+@keyframes beat{0%,100%{transform:scale(1)}50%{transform:scale(1.2)}}
+#msgs{flex:1;overflow-y:auto;padding:10px 14px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line)}
+.b{max-width:80%;padding:9px 12px;border-radius:16px;overflow-wrap:anywhere;white-space:pre-wrap}
+.me{align-self:flex-end;background:var(--rose);color:#2a1326;border-bottom-right-radius:4px}
+.th{align-self:flex-start;background:var(--bg2);border:1px solid var(--line);border-bottom-left-radius:4px}
+.b time{display:block;font-size:11px;opacity:.7;margin-top:3px}
+.me time{text-align:right}
+.tk{margin-left:5px;font-weight:700;letter-spacing:-2px}
+.tk.seen{color:#1f4fd8;opacity:1}
+.b img{max-width:100%;min-width:120px;min-height:80px;border-radius:10px;display:block;cursor:pointer;background:#0003}
+.b audio{max-width:100%;height:40px;display:block}
+.empty{color:var(--mute);text-align:center;margin:auto}
+#typ{display:none;padding:2px 16px 6px;color:var(--gold);font-size:13px}
+#tap{display:none;margin:0 12px 6px;background:var(--gold);color:#2b2108}
+#bar,#rbar{display:flex;gap:8px;padding:8px 10px;border-top:1px solid var(--line);align-items:flex-end}
+#rbar{display:none;align-items:center}
+#rtime{flex:1;color:var(--gold);font-weight:700}
+#txt{flex:1;max-height:110px;resize:none;background:var(--bg2);border:1px solid var(--line);color:var(--ink);padding:11px 13px;border-radius:14px}
+.tray{display:none;flex-wrap:wrap;gap:2px;padding:6px 10px;border-top:1px solid var(--line);max-height:124px;overflow-y:auto;background:var(--bg2)}
+.tray button{font-size:22px;width:40px;height:38px;background:none;padding:0;border-radius:8px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#ff5d73;margin-right:8px;animation:p 1s infinite}
+@keyframes p{50%{opacity:.3}}
+nav{display:flex;justify-content:space-around;background:#150f27;border-top:1px solid var(--line);padding:9px 0 calc(9px + env(safe-area-inset-bottom,0px))}
+nav a{color:var(--mute);text-decoration:none;font-size:13px}
+nav a.on{color:var(--gold);font-weight:700}
+#lb{display:none;position:fixed;inset:0;background:#000d;align-items:center;justify-content:center;z-index:30}
+#lb img{max-width:96%;max-height:92%;border-radius:8px}
+.scrim{position:fixed;inset:0;background:#0009;display:none;z-index:19}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--bg2);border-top:1px solid var(--line);border-radius:20px 20px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom,0px));max-height:82vh;overflow-y:auto;transform:translateY(105%);transition:transform .25s;z-index:20}
+.sheet.open{transform:none}
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.sh h2{margin:0;font-size:28px;color:var(--gold)}
+.np{font-size:18px;margin:4px 0 2px;overflow-wrap:anywhere}
+.sub{color:var(--mute);font-size:13px}
+.bar{display:flex;align-items:center;gap:10px;color:var(--mute);font-size:13px;font-variant-numeric:tabular-nums;margin-top:10px}
+input[type=range]{flex:1;accent-color:#f6a6b8}
+.ctl{display:flex;justify-content:center;align-items:center;gap:12px;margin:12px 0}
+.ctl .big{width:72px;font-size:22px}
+.vol{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.lst{display:grid;gap:8px;margin:10px 0}
+.it{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:8px 8px 8px 12px}
+.it .tt{flex:1;min-width:0}
+.it .tt b{display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it .tt span{display:block;font-size:12px;color:var(--mute)}
+.it.cur{border-color:var(--gold)}
+button.sm{height:36px;width:40px;padding:0;font-size:15px;background:var(--bg2);border:1px solid var(--line);color:var(--ink)}
+.lstat{color:var(--gold);font-size:13px;min-height:20px;margin:6px 0}
+@media(prefers-reduced-motion:reduce){.eq i,.live .sav,.live .hrt,.dot,.sheet{animation:none;transition:none}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <a class="back" href="/" aria-label="Back to Home">‹</a>
+  <div class="ttl"><b class="hand">Our Room</b><small id="rid"></small></div>
+  <button class="pill" id="pill" aria-label="Open music"><i class="eq" aria-hidden="true"><i></i><i></i><i></i></i><span id="pillTxt">🎵 No Songs</span></button>
+</div>
+
+<div class="seats" id="seats">
+  <div class="seat me">
+    <div class="sav"><img id="meP" alt="Your photo"><span id="meI"></span></div>
+    <div class="n hand" id="meN">...</div><div class="t">You</div>
+  </div>
+  <div class="hrt" aria-hidden="true">💞</div>
+  <div class="seat">
+    <div class="sav"><img id="otP" alt="Partner photo"><span id="otI"></span></div>
+    <div class="n hand" id="otN">...</div><div class="t" id="otT"></div>
+  </div>
+</div>
+
+<div id="msgs"><p class="empty">No messages yet. Say hi!</p></div>
+<div id="typ"></div>
+<button id="tap">▶ Tap to listen together</button>
+
+<div class="tray" id="tray"></div>
+<div id="bar">
+  <button class="ic" id="picBtn" aria-label="Send photo">📷</button>
+  <input type="file" id="pic" accept="image/*" hidden>
+  <button class="ic" id="emoBtn" aria-label="Emojis">😊</button>
+  <textarea id="txt" rows="1" placeholder="Message" maxlength="1000"></textarea>
+  <button class="ic" id="mic" aria-label="Record voice message">🎤</button>
+  <button id="send">Send</button>
+</div>
+<div id="rbar">
+  <button class="ghost" id="rcancel">Cancel</button>
+  <div id="rtime"><span class="dot"></span><span id="rt">0:00</span></div>
+  <button id="rsend">Send voice</button>
+</div>
+
+<nav>
+  <a href="/">Home</a><a href="/room.html" class="on">Room</a><a href="/profile.html">Profile</a><a href="/#memories">Memories</a><a href="/#note">Notes</a>
+</nav>
+<div id="lb"><img alt=""></div>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet" role="dialog" aria-label="Music">
+  <div class="sh"><h2 class="hand">Music 🎵</h2><button class="ghost" id="close" style="height:36px;padding:0 14px">Close</button></div>
+  <div class="np" id="npTitle">No song playing</div>
+  <div class="sub" id="npBy">Add a song and listen together.</div>
+  <div class="bar"><span id="cur">0:00</span><input type="range" id="seek" min="0" max="100" value="0" step="1" aria-label="Seek"><span id="dur">0:00</span></div>
+  <div class="ctl">
+    <button class="ic" id="back10" aria-label="Back 10 seconds">−10</button>
+    <button class="big" id="pp" aria-label="Play or pause">▶</button>
+    <button class="ic" id="fwd10" aria-label="Forward 10 seconds">+10</button>
+  </div>
+  <div class="vol"><span aria-hidden="true">🔈</span><input type="range" id="vol" min="0" max="100" value="100" aria-label="Volume (this phone only)"><span aria-hidden="true">🔊</span></div>
+  <div class="lstat" id="lstat"></div>
+  <div class="sub" style="margin-top:4px">Our songs</div>
+  <div class="lst" id="lib"><p class="sub">No songs yet.</p></div>
+  <button id="addSong" style="width:100%">＋ Add song from phone</button>
+  <input type="file" id="sfile" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac" hidden>
+  <p class="sub" style="margin:10px 0 0">MP3, M4A and similar, up to 8 MB each, 10 songs. Only you two can see them. Volume is separate on each phone.</p>
+</div>
+
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id)};
+  var S=null;try{S=JSON.parse(localStorage.getItem('together:session'))}catch(e){}
+  if(!S||!S.token){location.href='/';return}
+  function api(a,b){
+    b=b||{};b.token=S.token;
+    return fetch('/api/'+S.code+'/'+a,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})
+      .then(function(r){return r.json().then(function(j){return {ok:r.ok,status:r.status,j:j}})});
+  }
+  function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+  function pad(n){return n<10?'0'+n:''+n}
+  function fmt(s){s=Math.max(0,Math.floor(s||0));return Math.floor(s/60)+':'+pad(s%60)}
+  $('rid').textContent='Room ID: '+S.code;
+
+  var box=$('msgs'),last=0,me=S.name,first=true,pin=true,seenId=0,lastTyped=0,ticks={},shown={};
+  var offset=0,remote=null,lib=[],libSig='';
+
+  /* ---------- seats ---------- */
+  function seat(p,name,pics){
+    $(p+'N').textContent=name||'Waiting...';
+    $(p+'I').textContent=name?name.charAt(0).toUpperCase():'+';
+    var img=$(p+'P'),ver=name&&pics?pics[name]:0;
+    if(!ver){img.style.display='none';$(p+'I').style.display='block';shown[name]=0;return}
+    $(p+'I').style.display='none';
+    if(shown[name]===ver){img.style.display='block';return}
+    api('getPic',{name:name}).then(function(r){if(r.ok){img.src=r.j.img;img.style.display='block';shown[name]=ver}});
+  }
+  function renderSeats(j){
+    var other=j.names.filter(function(n){return n!==j.me})[0];
+    seat('me',j.me,j.pics);seat('ot',other,j.pics);
+    $('otT').textContent=other?'Partner':'Share your code to invite';
+  }
+
+  /* ---------- chat ---------- */
+  function pinned(){return box.scrollHeight-box.scrollTop-box.clientHeight<120}
+  function toEnd(){box.scrollTop=box.scrollHeight}
+  function fmtTime(ts){
+    var d=new Date(ts),t=d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+    return d.toDateString()===new Date().toDateString()?t:d.toLocaleDateString([], {day:'numeric',month:'short'})+', '+t;
+  }
+  function add(m){
+    var e=box.querySelector('.empty');if(e)e.remove();
+    var mine=m.by===me,d=el('div','b '+(mine?'me':'th'));
+    if(m.kind==='image'){
+      var im=el('img');im.alt='Photo';
+      im.onload=function(){if(pin)toEnd()};
+      im.onclick=function(){if(im.src){$('lb').firstChild.src=im.src;$('lb').style.display='flex'}};
+      d.appendChild(im);
+      api('media',{id:m.id}).then(function(r){if(r.ok)im.src=r.j.media});
+    }else if(m.kind==='voice'){
+      var a=el('audio');a.controls=true;a.preload='metadata';d.appendChild(a);
+      api('media',{id:m.id}).then(function(r){if(r.ok)a.src=r.j.media});
+    }else d.appendChild(document.createTextNode(m.text));
+    var t=el('time',null,(mine?'':m.by+' · ')+fmtTime(m.ts)+(m.kind==='voice'&&m.dur?' · '+m.dur+'s':''));
+    if(mine){var k=el('span','tk','✓');t.appendChild(k);ticks[m.id]=k}
+    d.appendChild(t);box.appendChild(d);
+  }
+  function updateTicks(os){
+    for(var id in ticks)if(+id<=os&&ticks[id].textContent!=='✓✓'){ticks[id].textContent='✓✓';ticks[id].className='tk seen'}
+  }
+  function poll(){
+    if(document.hidden&&!first)return;
+    var t0=Date.now();
+    api('chat',{since:last,seen:seenId,typing:Date.now()-lastTyped<3000}).then(function(r){
+      if(r.status===401||r.status===404){try{localStorage.removeItem('together:session')}catch(e){};location.href='/';return}
+      if(!r.ok)return;
+      var j=r.j;offset=j.now-(t0+Date.now())/2;me=j.me;
+      if(j.msgs.length){
+        pin=first||pinned();
+        j.msgs.forEach(function(m){add(m);if(m.id>last)last=m.id;if(m.by!==me&&m.id>seenId&&!document.hidden)seenId=m.id});
+        if(pin)toEnd();
+      }
+      updateTicks(j.otherSeen||0);
+      var ty=$('typ');
+      if(j.typing){ty.textContent=(j.otherName||'Your partner')+' is typing...';ty.style.display='block';if(pinned())toEnd()}
+      else ty.style.display='none';
+      renderSeats(j);setLib(j.lib||[]);remote=j.music||null;syncAudio();
+      first=false;
+    }).catch(function(){});
+  }
+  poll();setInterval(poll,1500);
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)poll()});
+
+  var txt=$('txt');
+  txt.oninput=function(){txt.style.height='auto';txt.style.height=Math.min(txt.scrollHeight,110)+'px';if(txt.value.trim())lastTyped=Date.now()};
+  function sent(r){if(r.ok){pin=true;lastTyped=0;poll()}else alert(r.j.error||'Could not send')}
+  $('send').onclick=function(){
+    var t=txt.value.trim();if(!t)return;
+    txt.value='';txt.style.height='auto';
+    api('send',{kind:'text',text:t}).then(sent).catch(function(){alert('No connection')});
+  };
+  txt.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey&&window.innerWidth>700){e.preventDefault();$('send').click()}};
+
+  /* emojis */
+  var EM=['😀','😂','🥹','😍','🥰','😘','😉','😎','🤗','🥺','😭','😡','🙈','😴','🤩','👍','👏','🙏','💪','🔥','✨','🎉','🎵','💋','❤️','💜','💕','💖','💔','🌹','🌙','⭐'];
+  EM.forEach(function(e){var b=el('button',null,e);b.setAttribute('aria-label','Emoji '+e);b.onclick=function(){txt.value+=e;txt.focus();lastTyped=Date.now()};$('tray').appendChild(b)});
+  $('emoBtn').onclick=function(){var t=$('tray');t.style.display=t.style.display==='flex'?'none':'flex'};
+
+  /* photos */
+  function compress(f){
+    return new Promise(function(res,rej){
+      var img=new Image(),u=URL.createObjectURL(f);
+      img.onload=function(){
+        var k=Math.min(1,1000/Math.max(img.width,img.height)),c=document.createElement('canvas');
+        c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);
+        var q=.7,d=c.toDataURL('image/jpeg',q);
+        while(d.length>1500000&&q>.3){q-=.1;d=c.toDataURL('image/jpeg',q)}
+        res(d);
+      };
+      img.onerror=function(){rej()};img.src=u;
+    });
+  }
+  $('picBtn').onclick=function(){$('pic').click()};
+  $('pic').onchange=function(){
+    var f=this.files[0];this.value='';if(!f)return;
+    compress(f).then(function(d){return api('send',{kind:'image',media:d})}).then(sent).catch(function(){alert('Could not send this photo')});
+  };
+  $('lb').onclick=function(){this.style.display='none'};
+
+  /* voice messages */
+  var rec,chunks,t0,rTimer,cancelled;
+  function ui(on){$('bar').style.display=on?'none':'flex';$('rbar').style.display=on?'flex':'none'}
+  $('mic').onclick=function(){
+    if(!navigator.mediaDevices||!window.MediaRecorder){alert('Voice recording is not supported in this browser.');return}
+    navigator.mediaDevices.getUserMedia({audio:true}).then(function(st){
+      var mt='';
+      ['audio/webm;codecs=opus','audio/webm','audio/mp4'].some(function(t){if(MediaRecorder.isTypeSupported(t)){mt=t;return true}});
+      rec=new MediaRecorder(st,mt?{mimeType:mt}:{});chunks=[];cancelled=false;
+      rec.ondataavailable=function(e){if(e.data.size)chunks.push(e.data)};
+      rec.onstop=function(){
+        st.getTracks().forEach(function(t){t.stop()});clearInterval(rTimer);ui(false);
+        var dur=Math.round((Date.now()-t0)/1000);
+        if(cancelled||dur<1)return;
+        var fr=new FileReader();
+        fr.onload=function(){api('send',{kind:'voice',media:fr.result,dur:dur}).then(sent).catch(function(){alert('No connection')})};
+        fr.readAsDataURL(new Blob(chunks,{type:rec.mimeType||'audio/webm'}));
+      };
+      rec.start();t0=Date.now();ui(true);$('rt').textContent='0:00';
+      rTimer=setInterval(function(){
+        var s=Math.floor((Date.now()-t0)/1000);$('rt').textContent=Math.floor(s/60)+':'+pad(s%60);
+        if(s>=60&&rec.state==='recording')rec.stop();
+      },250);
+    }).catch(function(){alert('Allow microphone permission to record.')});
+  };
+  $('rsend').onclick=function(){if(rec&&rec.state==='recording')rec.stop()};
+  $('rcancel').onclick=function(){cancelled=true;if(rec&&rec.state==='recording')rec.stop()};
+
+  /* ---------- music: shared player ---------- */
+  var au=new Audio();au.preload='auto';
+  var loadedId=null,loadingId=null,blobs={},lastLocal=0;
+  var vol=100;try{vol=+localStorage.getItem('tg:vol');if(!(vol>=0&&vol<=100))vol=100}catch(e){}
+  au.volume=vol/100;$('vol').value=vol;
+  $('vol').oninput=function(){au.volume=this.value/100;try{localStorage.setItem('tg:vol',this.value)}catch(e){}};
+
+  function track(id){return lib.filter(function(t){return t.id===id})[0]}
+  function download(t){
+    var parts=[],i=0;
+    function next(){
+      if(i>=t.n)return Promise.resolve(new Blob(parts,{type:t.mime||'audio/mpeg'}));
+      $('lstat').textContent='Loading song '+Math.round(i/t.n*100)+'%';
+      return api('libGet',{id:t.id,i:i}).then(function(r){
+        if(!r.ok)throw 0;
+        var bin=atob(r.j.d),u=new Uint8Array(bin.length);
+        for(var k=0;k<bin.length;k++)u[k]=bin.charCodeAt(k);
+        parts.push(u);i++;return next();
+      });
+    }
+    return next();
+  }
+  function getSong(t){
+    if(blobs[t.id])return Promise.resolve(blobs[t.id]);
+    var key='/song/'+t.id,cs=window.caches?caches.open('tg-songs'):Promise.resolve(null);
+    return cs.then(function(c){
+      return (c?c.match(key).then(function(m){return m?m.blob():null}):Promise.resolve(null)).then(function(bl){
+        if(bl)return bl;
+        return download(t).then(function(b){if(c)c.put(key,new Response(b)).catch(function(){});return b});
+      });
+    }).then(function(bl){blobs[t.id]=URL.createObjectURL(bl);return blobs[t.id]});
+  }
+
+  function pushState(playing,pos,id){
+    lastLocal=Date.now();
+    var at=Date.now()+offset,tid=id||(remote&&remote.id);
+    remote={id:tid,playing:playing,pos:pos,at:at,by:me};
+    return api('playSet',{id:tid,playing:playing,pos:pos,at:at}).then(function(r){if(!r.ok)$('lstat').textContent=r.j.error||'Could not sync'});
+  }
+  function showTap(on){$('tap').style.display=on?'block':'none'}
+  $('tap').onclick=function(){au.play().then(function(){showTap(false)}).catch(function(){})}
