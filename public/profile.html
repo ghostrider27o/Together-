@@ -122,10 +122,11 @@ nav a.on{color:var(--gold);font-weight:700}
   </div>
 
   <div class="btns"><button class="ghost" id="logout" style="font-size:13px;padding:9px 14px">Leave this space</button></div>
+  <p class="note" style="text-align:center">You stay signed in on this phone until you tap Leave.</p>
 </main>
 
 <nav>
-  <a href="/">Home</a><a href="/chat.html">Chat</a><a href="/music.html">Music</a><a href="/profile.html" class="on">Profile</a><a href="/#memories">Memories</a><a href="/#note">Notes</a>
+  <a href="/">Home</a><a href="/room.html">Room</a><a href="/profile.html" class="on">Profile</a><a href="/#memories">Memories</a><a href="/#note">Notes</a>
 </nav>
 
 <script>
@@ -249,10 +250,14 @@ nav a.on{color:var(--gold);font-weight:700}
       else $('pinErr').textContent=r.j.error||'Could not set PIN';
     });
   };
+
+  // Leave: forget this device (saved login and secure cookie)
   $('logout').onclick=function(){
     if(!confirm('Leave this space on this phone? You can rejoin with the code, your name and the PIN.'))return;
-    try{localStorage.removeItem('together:session')}catch(e){}
-    location.href='/';
+    fetch('/api/logout',{method:'POST'}).catch(function(){}).then(function(){
+      try{localStorage.removeItem('together:session')}catch(e){}
+      location.href='/';
+    });
   };
 
   function load(){
